@@ -1,0 +1,13 @@
+# Keep the image lean — ship only src/ and deps.
+eval/
+tests/
+data/
+*.md
+.env
+.env.*
+.git/
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+.vscode/

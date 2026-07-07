@@ -1,0 +1,42 @@
+[
+  {
+    "task_id": "e1",
+    "prompt": "Explain what a hash table is and why lookups are fast.",
+    "expected": ""
+  },
+  {
+    "task_id": "e2",
+    "prompt": "A shirt costs $40 and is discounted by 25%. What is the final price?",
+    "expected": "30"
+  },
+  {
+    "task_id": "e3",
+    "prompt": "Classify the sentiment of this review: 'The battery dies in an hour, very disappointing.'",
+    "expected": "Negative"
+  },
+  {
+    "task_id": "e4",
+    "prompt": "Summarise the following text in one sentence: The library extends opening hours during exam season to help students, adding weekend access and 24-hour study rooms.",
+    "expected": ""
+  },
+  {
+    "task_id": "e5",
+    "prompt": "Extract named entities from: 'Satya Nadella, CEO of Microsoft, visited Paris on March 3, 2024.'",
+    "expected": "Microsoft"
+  },
+  {
+    "task_id": "e6",
+    "prompt": "Find and fix the bug:\n```python\ndef add(a, b):\n    return a - b\n```",
+    "expected": "a + b"
+  },
+  {
+    "task_id": "e7",
+    "prompt": "Alice, Bob, and Carol finished 1st, 2nd, 3rd in some order. Alice was not last. Carol beat Bob. Who came first?",
+    "expected": "Alice"
+  },
+  {
+    "task_id": "e8",
+    "prompt": "Write a Python function that returns the nth Fibonacci number iteratively.",
+    "expected": "def"
+  }
+]

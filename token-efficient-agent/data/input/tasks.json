@@ -1,0 +1,10 @@
+[
+  {
+    "task_id": "t1",
+    "prompt": "Summarise the following text in one sentence: The city council approved a new park with playgrounds, walking trails, and a community garden to open next spring."
+  },
+  {
+    "task_id": "t2",
+    "prompt": "Calculate the final price of a $120 item after a 15% discount."
+  }
+]
