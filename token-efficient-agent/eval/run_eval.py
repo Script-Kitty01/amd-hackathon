@@ -13,7 +13,7 @@ import json
 import sys
 
 from src.config import load_config
-from src.fireworks_client import FireworksClient
+from src.google_client import GoogleClient
 from src.router import classify
 from src.solver import Solver
 
@@ -28,7 +28,8 @@ def main() -> None:
         items = json.load(f)
 
     cfg = load_config()
-    solver = Solver(cfg, FireworksClient(cfg))
+    client = GoogleClient(cfg)
+    solver = Solver(cfg, client)
     report = EvalReport()
 
     for item in items:

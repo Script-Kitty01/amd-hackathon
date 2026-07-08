@@ -12,11 +12,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from . import config
 from .config import load_config
-from .fireworks_client import FireworksClient
+from .google_client import GoogleClient
 from .io_utils import read_tasks, write_results
 from .solver import Solver
 
-MAX_WORKERS = 8
+MAX_WORKERS = 2
 
 
 def run() -> int:
@@ -24,7 +24,7 @@ def run() -> int:
     cfg = load_config()
     tasks = read_tasks(config.INPUT_PATH)
 
-    client = FireworksClient(cfg)
+    client = GoogleClient(cfg)
     solver = Solver(cfg, client)
 
     # Preserve input order; default every task to a safe fallback answer.

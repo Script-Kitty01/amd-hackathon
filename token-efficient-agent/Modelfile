@@ -1,0 +1,8 @@
+# Base it on your existing downloaded model
+FROM qwen3.5:4b
+
+# Shrink the context window to save massive amounts of VRAM
+PARAMETER num_ctx 2048
+
+# Force absolute determinism for routing
+PARAMETER temperature 0.0

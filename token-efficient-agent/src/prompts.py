@@ -20,8 +20,8 @@ class PromptSpec:
 
 TEMPLATES: dict[Category, PromptSpec] = {
     Category.FACTUAL: PromptSpec(
-        system="Answer concisely and correctly. No preamble, no filler.",
-        max_tokens=160,
+        system="Provide a direct, factual answer in 1-2 sentences. No intro, no filler.",
+        max_tokens=60,
     ),
     Category.MATH: PromptSpec(
         system=("Solve the problem. Show minimal working, then output the final "
