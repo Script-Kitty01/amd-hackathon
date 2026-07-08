@@ -11,6 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from . import config
+from .categories import load_model_preference
 from .config import load_config
 from .fireworks_client import FireworksClient
 from .io_utils import read_tasks, write_results
@@ -22,6 +23,7 @@ MAX_WORKERS = 8
 def run() -> int:
     start = time.monotonic()
     cfg = load_config()
+    load_model_preference()  # overlay launch-day sweep output if present
     tasks = read_tasks(config.INPUT_PATH)
 
     client = FireworksClient(cfg)

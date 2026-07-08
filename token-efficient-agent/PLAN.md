@@ -67,12 +67,12 @@ Points scale: 1 trivial · 2 small · 3 moderate · 5 substantial · 8 large.
 - [x] **T4** (5) Scoring-based router: highest-score category wins; confidence = winning share of total signal; `ambiguous` flag + `factual` safe default. `route()` added, `classify()` kept stable.
 - [x] **T5** (3) Complexity heuristic (easy/complex) on `RouteResult` from category class, length, reasoning cues, and clause density — feeds tiered escalation (T6).
 
-### M2 — Model selection
+### M2 — Model selection ✅ COMPLETE (logic built; final tuning is launch-day)
 
-- [ ] **T6** (5) Tiered escalation: small/low-token model first, escalate only when needed.
-- [ ] **T7** (2) Make `MODEL_PREFERENCE` data-driven from eval output.
-- [ ] **T8** (5) Model sweep in `run_eval.py`: category × allowed model → accuracy/token table.
-- [ ] **T19** (3) 🎁 Bonus: maximize gemma-4 use — from the sweep, route every category where gemma clears the gate to gemma; add gemma-specific prompt tweaks; document the gemma usage for bonus credit.
+- [x] **T6** (5) Tiered escalation in `solver.py`: route() picks the tier — easy/high-confidence starts on cheap preferred model, complex/ambiguous goes straight to strong; escalate on error/empty; tokens summed across attempts. Tested with a fake client.
+- [x] **T7** (2) `MODEL_PREFERENCE` data-driven: `load_model_preference()` overlays `config/model_preference.json` at startup; safe all-zero default when absent.
+- [x] **T8** (5) `run_eval.py --sweep`: runs every ALLOWED_MODEL × task, prints pass-rate/token table per category, writes recommended `config/model_preference.json`. (Run at launch with real models.)
+- [x] **T19** (3) 🎁 Sweep recommendation prefers a gemma model among gate-passers when within 10% of best tokens, so gemma is chosen wherever competitive. (Confirm gemma model ID at launch.)
 
 ### M3 — Validate & test
 
