@@ -30,16 +30,16 @@ def run() -> int:
     # Preserve input order; default every task to a safe fallback answer.
     answers: dict[str, str] = {t.task_id: "Unable to produce an answer." for t in tasks}
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = {pool.submit(solver.solve, t.task_id, t.prompt): t.task_id for t in tasks}
-        for fut in as_completed(futures):
-            if time.monotonic() - start > config.RUNTIME_BUDGET_SECONDS:
-                break
-            try:
-                outcome = fut.result()
-                answers[outcome.task_id] = outcome.answer
-            except Exception:
-                pass  # keep the fallback answer
+    # Process sequentially instead of concurrently to respect strict free-tier rate limits
+    for t in tasks:
+        if time.monotonic() - start > config.RUNTIME_BUDGET_SECONDS:
+            print("Wall-clock budget exceeded. Stopping early.", file=sys.stderr)
+            break
+        try:
+            outcome = solver.solve(t.task_id, t.prompt)
+            answers[outcome.task_id] = outcome.answer
+        except Exception as exc:
+             print(f"Task {t.task_id} failed completely: {exc}", file=sys.stderr)
 
     results = [{"task_id": t.task_id, "answer": answers[t.task_id]} for t in tasks]
     write_results(config.OUTPUT_PATH, results)
