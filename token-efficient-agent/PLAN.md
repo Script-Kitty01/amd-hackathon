@@ -133,10 +133,10 @@ Points: 1 trivial · 2 small · 3 moderate · 5 substantial · 8 large.
 - [x] **T8** (5) `run_eval.py --sweep` model sweep + recommendation.
 - [x] **T19** (3) 🎁 Gemma preference in sweep recommendation.
 
-### M3 — Local answering layer ⬅ NEXT
+### M3 — Local answering layer ⬅ IN PROGRESS
 
-- [ ] **T20** (5) Local solver interface + registry: `try_solve(prompt) -> Solution(answer, confidence) | ABSTAIN`, keyed by category.
-- [ ] **T21** (3) Math solver: parse arithmetic/percentage/simple word problems, evaluate exactly; confidence = clean parse + sane result.
+- [x] **T20** (5) Local solver interface + registry in `src/local_solvers.py`: `try_solve(prompt) -> Solution(answer, confidence) | None (abstain)`, keyed by category. No third-party deps.
+- [x] **T21** (3) Deterministic math solver: `X% of Y`, percentage discount/increase on a price, bare arithmetic; abstains on anything unclear to protect the gate. 8 tests.
 - [ ] **T22** (3) Sentiment: local classifier/lexicon; confidence = class probability.
 - [ ] **T23** (3) NER: local spaCy pipeline → required JSON shape; confidence = entity/model scores.
 - [ ] **T24** (8) Local LLM runtime: gemma via Ollama/llama.cpp on ROCm; wrapper matching the solver interface; confidence via logprobs and/or self-consistency.
