@@ -39,6 +39,13 @@ def test_average_in_prose_does_not_route_to_math():
     assert classify(prompt) == Category.FACTUAL
 
 
+def test_numeric_arithmetic_routes_to_math():
+    assert classify("What is the average of 4, 8, and 12?") == Category.MATH
+    assert classify("What is 15 plus 27?") == Category.MATH
+    assert classify("What percent of 200 is 50?") == Category.MATH
+    assert classify("Find the sum of 10, 20 and 30.") == Category.MATH
+
+
 def test_logic_ranking_puzzle():
     prompt = ("Alice, Bob, and Carol finished 1st, 2nd, 3rd in some order. "
               "Alice was not last. Carol beat Bob. Who came first?")

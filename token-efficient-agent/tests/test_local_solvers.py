@@ -39,6 +39,32 @@ def test_bare_arithmetic_expression():
     assert s.answer == "84"
 
 
+def test_average_of_list():
+    assert solve("What is the average of 4, 8, and 12?").answer == "8"
+
+
+def test_sum_of_list():
+    assert solve("Find the sum of 10, 20 and 30.").answer == "60"
+
+
+def test_product_of_list():
+    assert solve("What is the product of 6 and 7?").answer == "42"
+
+
+def test_what_percent_of():
+    assert solve("What percent of 200 is 50?").answer == "25%"
+
+
+def test_word_arithmetic():
+    assert solve("What is 15 plus 27?").answer == "42"
+    assert solve("Compute 100 divided by 4.").answer == "25"
+    assert solve("What is 9 times 8?").answer == "72"
+
+
+def test_divide_by_zero_abstains():
+    assert solve("What is 5 divided by 0?") is None
+
+
 def test_abstains_on_multistep_discount():
     # Two percentages / "then additional" -> must abstain, not answer $200.
     s = solve(

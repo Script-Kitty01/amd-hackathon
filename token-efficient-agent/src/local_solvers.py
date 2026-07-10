@@ -43,6 +43,23 @@ _PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|percent)", re.I)
 _PRICE = re.compile(r"\$\s*(\d[\d,]*(?:\.\d+)?)")
 _PURE_EXPR = re.compile(r"^[\s\d+\-*/().]+$")
 
+# A list of numbers separated by commas / "and" / "&" (e.g. "4, 8, and 12").
+# Plain numbers (no embedded thousands-comma) so list commas aren't swallowed.
+_NUMLIST = r"(-?\d+(?:\.\d+)?(?:(?:\s*(?:,|and|&)\s*)+-?\d+(?:\.\d+)?)*)"
+# Explicit-list aggregates and simple two-operand word arithmetic (all safe,
+# single-operation, deterministic).
+_AVG = re.compile(r"\b(?:average|mean)\s+of\s+" + _NUMLIST, re.I)
+_SUM = re.compile(r"\bsum\s+of\s+" + _NUMLIST, re.I)
+_PRODUCT = re.compile(r"\bproduct\s+of\s+" + _NUMLIST, re.I)
+_PCT_WHAT = re.compile(
+    r"what\s+percent(?:age)?\s+of\s+(\d+(?:\.\d+)?)\s+is\s+(\d+(?:\.\d+)?)", re.I
+)
+_ARITH = re.compile(
+    r"(-?\d+(?:\.\d+)?)\s+(plus|minus|times|multiplied by|divided by)\s+(-?\d+(?:\.\d+)?)",
+    re.I,
+)
+_NUM_RE = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+
 _DISCOUNT_WORDS = ("discount", "off", "reduced", "markdown")
 _INCREASE_WORDS = ("increase", "increased", "markup", "marked up", "more", "raise", "raised")
 # Signals of a multi-step problem the naive solver must NOT attempt.
@@ -51,6 +68,23 @@ _MULTISTEP_WORDS = ("then", "additional", "additionally", "after that", "followe
 
 def _num(s: str) -> float:
     return float(s.replace(",", ""))
+
+
+def _numbers(s: str) -> list[float]:
+    return [float(x.replace(",", "")) for x in _NUM_RE.findall(s)]
+
+
+def _apply_op(a: float, op: str, b: float) -> Optional[float]:
+    op = op.lower()
+    if op == "plus":
+        return a + b
+    if op == "minus":
+        return a - b
+    if op in ("times", "multiplied by"):
+        return a * b
+    if op == "divided by":
+        return a / b if b != 0 else None
+    return None
 
 
 def _fmt(value: float, currency: bool) -> str:
@@ -101,7 +135,45 @@ class MathSolver:
                 if any(w in low for w in _INCREASE_WORDS):
                     return Solution(_fmt(price * (1 + pct / 100.0), True), confidence=0.9)
 
-        # 3) a bare arithmetic expression, e.g. "12 * (3 + 4)"
+        # 3) average / mean of an explicit list of numbers
+        m = _AVG.search(p)
+        if m:
+            nums = _numbers(m.group(1))
+            if len(nums) >= 2:
+                return Solution(_fmt(sum(nums) / len(nums), "$" in p), confidence=0.9)
+
+        # 4) sum of an explicit list
+        m = _SUM.search(p)
+        if m:
+            nums = _numbers(m.group(1))
+            if len(nums) >= 2:
+                return Solution(_fmt(sum(nums), "$" in p), confidence=0.9)
+
+        # 5) product of an explicit list
+        m = _PRODUCT.search(p)
+        if m:
+            nums = _numbers(m.group(1))
+            if len(nums) >= 2:
+                prod = 1.0
+                for n in nums:
+                    prod *= n
+                return Solution(_fmt(prod, "$" in p), confidence=0.9)
+
+        # 6) "what percent of X is Y"
+        m = _PCT_WHAT.search(p)
+        if m:
+            x, y = _num(m.group(1)), _num(m.group(2))
+            if x != 0:
+                return Solution(_fmt(y / x * 100.0, False) + "%", confidence=0.9)
+
+        # 7) simple two-operand word arithmetic ("15 plus 27", "100 divided by 4")
+        m = _ARITH.search(p)
+        if m and single_clean:
+            result = _apply_op(_num(m.group(1)), m.group(2), _num(m.group(3)))
+            if result is not None:
+                return Solution(_fmt(result, "$" in p), confidence=0.88)
+
+        # 8) a bare arithmetic expression, e.g. "12 * (3 + 4)"
         core = p.rstrip("=?. ")
         if _PURE_EXPR.match(core) and any(op in core for op in "+-*/") and re.search(r"\d", core):
             try:
@@ -128,6 +200,8 @@ _NEG_WORDS = frozenset("""
 bad terrible awful horrible worst hate hated dislike disappointing disappointed
 poor slow broken useless waste wasted defective faulty annoying frustrating
 frustrated unhappy sad angry disgusting cheap overpriced dies died fails failed
+rude dirty noisy uncomfortable regret regretted refund complaint complaints
+mediocre lousy pathetic clunky laggy glitchy unreliable ripoff scam garbage
 failing crash crashed buggy unreliable uncomfortable regret avoid
 """.split())
 
