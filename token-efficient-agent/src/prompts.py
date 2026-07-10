@@ -49,9 +49,10 @@ TEMPLATES: dict[Category, PromptSpec] = {
         max_tokens=320,
     ),
     Category.LOGIC: PromptSpec(
-        system=("Reason step by step but concisely, satisfying every stated "
-                "constraint. End with the final answer on its own line."),
-        max_tokens=260,
+        system=("Solve the puzzle so every stated constraint holds. Give at most "
+                "two brief reasoning steps, then output the final answer on its "
+                "own line as 'Answer: <value>'."),
+        max_tokens=150,
     ),
     Category.CODE_GEN: PromptSpec(
         system=("Write only the requested function(s), correct and complete, in "

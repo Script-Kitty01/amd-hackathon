@@ -25,7 +25,7 @@ def finalize(category: Category, answer: str) -> str:
     if not text:
         return text
 
-    if category == Category.MATH:
+    if category in (Category.MATH, Category.LOGIC):
         matches = _ANSWER_LINE.findall(text)
         if matches:
             return matches[-1].strip().rstrip(".")
