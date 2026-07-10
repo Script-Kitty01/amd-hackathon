@@ -23,10 +23,13 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && python -m spacy download en_core_web_sm
 
 # Bundle the local model weights into the image (start server, wait, pull).
-RUN set -eu; \
+# On failure, dump the ollama log + disk usage so the build output shows why.
+RUN which ollama && ollama --version && df -h /; \
     ollama serve > /tmp/ollama.log 2>&1 & \
-    for i in $(seq 1 30); do ollama list >/dev/null 2>&1 && break; sleep 1; done; \
-    ollama pull llama3.2:3b; \
+    for i in $(seq 1 60); do ollama list >/dev/null 2>&1 && break; sleep 1; done; \
+    if ! ollama pull llama3.2:3b; then \
+        echo '=== ollama serve log ==='; cat /tmp/ollama.log; df -h /; exit 1; \
+    fi; \
     ollama list
 
 COPY src/ ./src/
