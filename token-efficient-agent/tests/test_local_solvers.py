@@ -91,6 +91,22 @@ def test_sentiment_abstains_without_signal():
     assert SentimentSolver().try_solve("The meeting is scheduled for Tuesday.") is None
 
 
+def test_sentiment_abstains_on_contrastive_review():
+    # "slow ... but ... delicious" is nuanced -> must abstain (escalate), not
+    # confidently mislabel it Negative.
+    s = SentimentSolver().try_solve(
+        "Classify the sentiment: 'The service was slow, but the food was "
+        "absolutely delicious.'"
+    )
+    assert s is None
+
+
+def test_sentiment_abstains_on_mixed_signals():
+    # Both positive and negative cues without a contrast word -> abstain.
+    s = SentimentSolver().try_solve("Classify the sentiment: 'great screen, terrible battery'")
+    assert s is None
+
+
 # --- NER (T23) ---
 
 def test_ner_extracts_person_org_date():

@@ -54,9 +54,11 @@ def test_math_answered_by_local_solver_zero_tokens():
 
 
 def test_low_confidence_local_escalates_to_fireworks():
-    # Logic has no local solver and local LLM is conservative-gated -> Fireworks.
+    # Conservative threshold for logic -> low-confidence local answer escalates.
+    # (Explicit thresholds so the test doesn't depend on config/confidence.json.)
+    conservative = Thresholds(local_solver_thr={}, local_llm_thr={Category.LOGIC: 0.99})
     fw = FakeFireworks(answer="Alice", tokens=30)
-    c = Cascade(fireworks_solver=fw, local_llm=const_llm("Alice?"))
+    c = Cascade(thresholds=conservative, fireworks_solver=fw, local_llm=const_llm("Alice?"))
     out = c.solve(
         "t",
         "Alice, Bob, and Carol finished 1st, 2nd, 3rd in some order. "

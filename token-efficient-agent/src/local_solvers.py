@@ -120,7 +120,8 @@ _POS_WORDS = frozenset("""
 good great excellent amazing awesome wonderful fantastic love loved loving like
 liked best perfect happy pleased satisfied enjoy enjoyed enjoyable superb brilliant
 outstanding delightful positive recommend recommended nice beautiful comfortable
-fast reliable helpful impressive worth flawless smooth
+fast reliable helpful impressive worth flawless smooth delicious tasty gorgeous
+stunning pleasant friendly favourite favorite terrific lovely
 """.split())
 
 _NEG_WORDS = frozenset("""
@@ -132,7 +133,16 @@ failing crash crashed buggy unreliable uncomfortable regret avoid
 
 _NEGATORS = frozenset("not no never n't isn't wasn't don't didn't doesn't cannot can't".split())
 
-_WORD_RE = re.compile(r"[a-z']+")
+# Contrast/concession cues signal a nuanced review a lexicon can't score reliably.
+_CONTRAST = re.compile(
+    r"\b(but|however|although|though|yet|nonetheless|whereas|even though|"
+    r"on the other hand|that said|mixed)\b",
+    re.I,
+)
+
+# Words start with a letter; internal apostrophes kept (don't), surrounding
+# quotes excluded (so 'great' tokenizes to great, not 'great).
+_WORD_RE = re.compile(r"[a-z]+(?:'[a-z]+)*")
 
 
 class SentimentSolver:
@@ -145,6 +155,12 @@ class SentimentSolver:
     category = Category.SENTIMENT
 
     def try_solve(self, prompt: str) -> Optional[Solution]:
+        # Contrastive/nuanced reviews ("great food but slow service") are beyond a
+        # lexicon — abstain so the local LLM handles the nuance rather than risk a
+        # confidently-wrong label.
+        if _CONTRAST.search(prompt):
+            return None
+
         words = _WORD_RE.findall(prompt.lower())
         if not words:
             return None
@@ -155,33 +171,21 @@ class SentimentSolver:
             negated = i > 0 and words[i - 1] in _NEGATORS
             if w in _POS_WORDS:
                 triggers.append(w)
-                if negated:
-                    neg += 1
-                else:
-                    pos += 1
+                neg, pos = (neg + 1, pos) if negated else (neg, pos + 1)
             elif w in _NEG_WORDS:
                 triggers.append(w)
-                if negated:
-                    pos += 1
-                else:
-                    neg += 1
+                pos, neg = (pos + 1, neg) if negated else (pos, neg + 1)
 
-        total = pos + neg
-        if total == 0:
+        if pos == 0 and neg == 0:
             return None  # no signal -> escalate
+        if pos > 0 and neg > 0:
+            return None  # mixed signals -> escalate for nuanced judgement
 
-        if pos > neg:
-            label = "Positive"
-        elif neg > pos:
-            label = "Negative"
-        else:
-            label = "Neutral"
-
-        margin = abs(pos - neg) / total
-        confidence = 0.55 + 0.4 * margin  # 0.55..0.95
+        label = "Positive" if pos > neg else "Negative"
         reason = ", ".join(dict.fromkeys(triggers[:3]))
         answer = f"{label}. Key indicators: {reason}." if reason else label
-        return Solution(answer, confidence=round(confidence, 3))
+        # Clean, one-sided signal (mixed/contrastive already escalated).
+        return Solution(answer, confidence=0.9)
 
 
 # --- NER solver (T23) ------------------------------------------------------
