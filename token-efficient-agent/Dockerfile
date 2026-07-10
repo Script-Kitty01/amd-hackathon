@@ -1,30 +1,33 @@
 # Self-contained Track 1 image: bundles a small local model (llama3.2:3b) served
 # by Ollama on CPU, plus the deterministic solvers and the Fireworks fallback.
 #
-# Design for the grading box (CPU-only, 4 GB RAM, 2 vCPU, image <= 10 GB):
-#   - Local tier: llama3.2:3b (~2 GB, 4-bit) via Ollama at localhost:11434.
-#     Its inference is free (0 tokens) and answers the easy categories.
-#   - Fireworks tier: the harness-injected ALLOWED_MODELS handle the hard tail.
-# Config (FIREWORKS_*) is read from the environment at runtime — never bundled.
+# Grading box: CPU-only, 4 GB RAM, 2 vCPU, image <= 10 GB.
+#   - Local tier: llama3.2:3b (~2 GB) via Ollama at localhost:11434 (free tokens).
+#   - Fireworks tier: harness-injected ALLOWED_MODELS handle the hard tail.
+# FIREWORKS_* config is read from the environment at runtime — never bundled.
 
-FROM ollama/ollama:latest
+FROM python:3.11-slim
 
-# Python + our app dependencies on top of the Ollama (Ubuntu) base.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-pip \
+    && apt-get install -y --no-install-recommends curl ca-certificates procps \
     && rm -rf /var/lib/apt/lists/*
+
+# Install the Ollama CPU runtime.
+RUN curl -fsSL https://ollama.com/install.sh | sh
 
 WORKDIR /app
 
+# Python app dependencies + the spaCy NER model.
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt \
-    && python3 -m spacy download en_core_web_sm
+RUN pip install --no-cache-dir -r requirements.txt \
+    && python -m spacy download en_core_web_sm
 
-# Bundle the local model weights into the image (start server, pull, stop).
-RUN ollama serve & \
-    sleep 8 && \
-    ollama pull llama3.2:3b && \
-    sleep 2
+# Bundle the local model weights into the image (start server, wait, pull).
+RUN set -eu; \
+    ollama serve > /tmp/ollama.log 2>&1 & \
+    for i in $(seq 1 30); do ollama list >/dev/null 2>&1 && break; sleep 1; done; \
+    ollama pull llama3.2:3b; \
+    ollama list
 
 COPY src/ ./src/
 COPY config/ ./config/
@@ -38,5 +41,4 @@ ENV LOCAL_LLM_BASE_URL=http://localhost:11434/v1 \
     LOCAL_LLM_API_KEY=local \
     LOCAL_LLM_SAMPLES=1
 
-# The ollama base image sets ENTRYPOINT to the ollama binary — override it.
 ENTRYPOINT ["/entrypoint.sh"]
