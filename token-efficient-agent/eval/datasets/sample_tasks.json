@@ -1,42 +1,98 @@
 [
   {
-    "task_id": "e1",
-    "prompt": "Explain what a hash table is and why lookups are fast.",
-    "expected": ""
+    "task_id": "factual_easy",
+    "prompt": "What is the capital of France?",
+    "expected": "Paris",
+    "difficulty": "easy"
   },
   {
-    "task_id": "e2",
-    "prompt": "A shirt costs $40 and is discounted by 25%. What is the final price?",
-    "expected": "30"
+    "task_id": "factual_complex",
+    "prompt": "Explain how a hash table achieves average O(1) lookups and describe one situation where lookups degrade toward O(n).",
+    "expected": "",
+    "difficulty": "complex"
   },
   {
-    "task_id": "e3",
-    "prompt": "Classify the sentiment of this review: 'The battery dies in an hour, very disappointing.'",
-    "expected": "Negative"
+    "task_id": "math_easy",
+    "prompt": "What is 15% of 200?",
+    "expected": "30",
+    "difficulty": "easy"
   },
   {
-    "task_id": "e4",
-    "prompt": "Summarise the following text in one sentence: The library extends opening hours during exam season to help students, adding weekend access and 24-hour study rooms.",
-    "expected": ""
+    "task_id": "math_complex",
+    "prompt": "A $250 jacket is discounted by 20%, then an additional 10% is taken off the reduced price. What is the final price?",
+    "expected": "180",
+    "difficulty": "complex"
   },
   {
-    "task_id": "e5",
+    "task_id": "sentiment_easy",
+    "prompt": "Classify the sentiment of this review: 'I absolutely love this, it works great and feels reliable!'",
+    "expected": "Positive",
+    "difficulty": "easy"
+  },
+  {
+    "task_id": "sentiment_complex",
+    "prompt": "Classify the sentiment and justify: 'The design is gorgeous, but it crashes constantly and support ignored my emails.'",
+    "expected": "Negative",
+    "difficulty": "complex"
+  },
+  {
+    "task_id": "summarization_easy",
+    "prompt": "Summarise the following text in one sentence: The library extended its opening hours during exam season, adding weekend access and 24-hour study rooms to help students.",
+    "expected": "",
+    "difficulty": "easy"
+  },
+  {
+    "task_id": "summarization_complex",
+    "prompt": "Summarise the following passage in one sentence: The city council approved a phased transit plan that adds three bus routes next year, a light-rail extension in three years, and dedicated cycling lanes, funded by a mix of federal grants and a small levy on commercial parking.",
+    "expected": "",
+    "difficulty": "complex"
+  },
+  {
+    "task_id": "ner_easy",
     "prompt": "Extract named entities from: 'Satya Nadella, CEO of Microsoft, visited Paris on March 3, 2024.'",
-    "expected": "Microsoft"
+    "expected": "Microsoft",
+    "difficulty": "easy"
   },
   {
-    "task_id": "e6",
+    "task_id": "ner_complex",
+    "prompt": "Extract named entities from: 'On 12 June 2023, Dr. Amara Okoye of Stanford University met delegates from Toyota Motor Corporation in Berlin and Nairobi.'",
+    "expected": "Stanford",
+    "difficulty": "complex"
+  },
+  {
+    "task_id": "code_debug_easy",
     "prompt": "Find and fix the bug:\n```python\ndef add(a, b):\n    return a - b\n```",
-    "expected": "a + b"
+    "expected": "a + b",
+    "difficulty": "easy"
   },
   {
-    "task_id": "e7",
+    "task_id": "code_debug_complex",
+    "prompt": "Find and fix the bug in this function that should return the maximum of a list:\n```python\ndef max_of(xs):\n    m = 0\n    for x in xs:\n        if x > m:\n            m = x\n    return m\n```",
+    "expected": "xs[0]",
+    "difficulty": "complex"
+  },
+  {
+    "task_id": "logic_easy",
     "prompt": "Alice, Bob, and Carol finished 1st, 2nd, 3rd in some order. Alice was not last. Carol beat Bob. Who came first?",
-    "expected": "Alice"
+    "expected": "Alice",
+    "difficulty": "easy"
   },
   {
-    "task_id": "e8",
+    "task_id": "logic_complex",
+    "prompt": "Four friends sit in a row. Dana is not at either end. Evan is immediately to the right of Dana. Farah is at the left end. Who sits at the right end?",
+    "expected": "",
+    "difficulty": "complex"
+  },
+  {
+    "task_id": "code_gen_easy",
     "prompt": "Write a Python function that returns the nth Fibonacci number iteratively.",
-    "expected": "def"
+    "expected": "def",
+    "difficulty": "easy"
+  },
+  {
+    "task_id": "code_gen_complex",
+    "prompt": "Write a Python function that merges two already-sorted lists into a single sorted list without calling sorted() or .sort().",
+    "expected": "def",
+    "difficulty": "complex"
   }
 ]

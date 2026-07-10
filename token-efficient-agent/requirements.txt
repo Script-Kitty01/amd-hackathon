@@ -1,6 +1,5 @@
+# Runtime dependency: OpenAI-compatible client used for both the Fireworks
+# fallback and the local LLM endpoint (Ollama exposes an OpenAI-compatible API).
 openai>=1.40.0
-python-dotenv>=0.21.0
-rich>=13.0.0
-fastapi
-uvicorn
 
+# (dev only, not shipped in the image: pytest)

@@ -20,40 +20,97 @@ import os
 import sys
 from collections import defaultdict
 
+import time
+
+from src.cascade import Cascade
 from src.categories import Category
 from src.config import load_config
 from src.fireworks_client import FireworksClient
+from src.local_llm import LocalLLM
 from src.prompts import spec_for
 from src.router import classify
 from src.solver import Solver
+from src.thresholds import load_thresholds
 
+from .judge import Judge
 from .scorer import EvalRecord, EvalReport, check_match
 
 DEFAULT_DATASET = "eval/datasets/sample_tasks.json"
 PREF_OUTPUT = "config/model_preference.json"
 
 
+def _load_dotenv(path: str = ".env") -> None:
+    """Minimal .env loader for local dev (not used in the shipped image)."""
+    if not os.path.exists(path):
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            os.environ.setdefault(key.strip(), val.strip())
+
+
+def _build_fireworks_solver() -> Solver | None:
+    """Build the Fireworks/fallback solver if its env is configured, else None."""
+    try:
+        cfg = load_config()
+    except KeyError:
+        return None
+    return Solver(cfg, FireworksClient(cfg))
+
+
 # --- single run ------------------------------------------------------------
 
 def run_single(dataset_path: str) -> None:
+    _load_dotenv()
     items = _load(dataset_path)
-    cfg = load_config()
-    solver = Solver(cfg, FireworksClient(cfg))
-    report = EvalReport()
 
+    fireworks_solver = _build_fireworks_solver()
+    local_llm = LocalLLM.from_env()
+    judge = Judge.from_env()
+
+    cascade = Cascade(
+        thresholds=load_thresholds(),
+        fireworks_solver=fireworks_solver,
+        local_llm=local_llm,
+    )
+
+    print(
+        f"config: local_llm={'on' if local_llm else 'off'} "
+        f"fallback={'on' if fireworks_solver else 'off'} "
+        f"judge={'on' if judge else 'off (substring match)'}"
+    )
+
+    report = EvalReport()
+    start = time.time()
     for item in items:
-        outcome = solver.solve(str(item["task_id"]), str(item["prompt"]))
+        prompt = str(item["prompt"])
+        outcome = cascade.solve(str(item["task_id"]), prompt)
+        expected = item.get("expected")
+        if judge is not None:
+            passed = judge.passed(prompt, outcome.answer, expected)
+        else:
+            passed = check_match(outcome.answer, expected)
         report.records.append(
             EvalRecord(
                 task_id=outcome.task_id,
-                category=classify(item["prompt"]).value,
+                category=outcome.category.value,
                 answer=outcome.answer,
                 total_tokens=outcome.total_tokens,
-                passed=check_match(outcome.answer, item.get("expected")),
+                passed=passed,
+                tier=outcome.tier,
             )
         )
+        print(f"  {outcome.task_id:<22} {outcome.tier:<12} "
+              f"{'PASS' if passed else 'FAIL'}  tokens={outcome.total_tokens}")
 
-    print(report.summary())
+    elapsed = time.time() - start
+    print("\n" + report.summary())
+    print(f"wall time:    {elapsed:.1f}s")
+    if judge is not None:
+        print(f"judge tokens: {judge.total_tokens} (not counted toward agent score)")
 
 
 # --- model sweep (T8) ------------------------------------------------------

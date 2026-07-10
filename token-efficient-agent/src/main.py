@@ -11,11 +11,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from . import config
+from .cascade import Cascade
 from .categories import load_model_preference
 from .config import load_config
 from .fireworks_client import FireworksClient
 from .io_utils import read_tasks, write_results
+from .local_llm import LocalLLM
 from .solver import Solver
+from .thresholds import load_thresholds
 
 MAX_WORKERS = 8
 
@@ -26,14 +29,19 @@ def run() -> int:
     load_model_preference()  # overlay launch-day sweep output if present
     tasks = read_tasks(config.INPUT_PATH)
 
-    client = FireworksClient(cfg)
-    solver = Solver(cfg, client)
+    # Build the local-first cascade: local solvers -> local LLM -> Fireworks.
+    fireworks_solver = Solver(cfg, FireworksClient(cfg))
+    cascade = Cascade(
+        thresholds=load_thresholds(),
+        fireworks_solver=fireworks_solver,
+        local_llm=LocalLLM.from_env(),  # None if no local model configured
+    )
 
     # Preserve input order; default every task to a safe fallback answer.
     answers: dict[str, str] = {t.task_id: "Unable to produce an answer." for t in tasks}
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = {pool.submit(solver.solve, t.task_id, t.prompt): t.task_id for t in tasks}
+        futures = {pool.submit(cascade.solve, t.task_id, t.prompt): t.task_id for t in tasks}
         for fut in as_completed(futures):
             if time.monotonic() - start > config.RUNTIME_BUDGET_SECONDS:
                 break

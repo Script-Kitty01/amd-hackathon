@@ -23,6 +23,10 @@ class Config:
     api_key: str
     base_url: str
     models: list[str]
+    # Optional: disable/limit provider "thinking" tokens (e.g. "none" for Gemini
+    # 2.5). Thinking models otherwise burn the max_tokens budget on hidden
+    # reasoning, truncating answers and inflating token cost.
+    reasoning_effort: str | None = None
 
     @property
     def default_model(self) -> str:
@@ -35,4 +39,5 @@ def load_config() -> Config:
         api_key=os.environ["FIREWORKS_API_KEY"],
         base_url=os.environ["FIREWORKS_BASE_URL"],
         models=[m.strip() for m in os.environ["ALLOWED_MODELS"].split(",") if m.strip()],
+        reasoning_effort=os.environ.get("FIREWORKS_REASONING_EFFORT") or None,
     )

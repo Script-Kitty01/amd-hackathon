@@ -20,6 +20,7 @@ class EvalRecord:
     answer: str
     total_tokens: int
     passed: bool | None = None  # None when no reference is available
+    tier: str | None = None  # which cascade tier answered
 
 
 @dataclass
@@ -44,6 +45,23 @@ class EvalReport:
             return None
         return sum(1 for r in judged if r.passed) / len(judged)
 
+    @property
+    def tier_counts(self) -> dict[str, int]:
+        agg: dict[str, int] = defaultdict(int)
+        for r in self.records:
+            if r.tier:
+                agg[r.tier] += 1
+        return dict(agg)
+
+    @property
+    def local_answer_rate(self) -> float | None:
+        """Fraction of tasks answered locally (zero Fireworks tokens)."""
+        tiered = [r for r in self.records if r.tier]
+        if not tiered:
+            return None
+        local = sum(1 for r in tiered if r.tier != "fireworks")
+        return local / len(tiered)
+
     def summary(self) -> str:
         lines = [
             f"tasks:        {len(self.records)}",
@@ -52,6 +70,13 @@ class EvalReport:
         acc = self.accuracy
         if acc is not None:
             lines.append(f"accuracy:     {acc:.1%}")
+        rate = self.local_answer_rate
+        if rate is not None:
+            lines.append(f"local-answer: {rate:.1%}  (0-token tasks)")
+        if self.tier_counts:
+            lines.append("tier breakdown:")
+            for tier, n in sorted(self.tier_counts.items()):
+                lines.append(f"  {tier:<14} {n}")
         lines.append("tokens by category:")
         for cat, tok in sorted(self.tokens_by_category.items()):
             lines.append(f"  {cat:<16} {tok}")

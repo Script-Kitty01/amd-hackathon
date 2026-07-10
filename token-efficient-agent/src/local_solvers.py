@@ -45,6 +45,8 @@ _PURE_EXPR = re.compile(r"^[\s\d+\-*/().]+$")
 
 _DISCOUNT_WORDS = ("discount", "off", "reduced", "markdown")
 _INCREASE_WORDS = ("increase", "increased", "markup", "marked up", "more", "raise", "raised")
+# Signals of a multi-step problem the naive solver must NOT attempt.
+_MULTISTEP_WORDS = ("then", "additional", "additionally", "after that", "followed by", "subsequent")
 
 
 def _num(s: str) -> float:
@@ -74,23 +76,30 @@ class MathSolver:
         p = prompt.strip()
         low = p.lower()
 
+        # Multi-step / multi-percentage problems are beyond this solver — abstain
+        # rather than return a confidently-wrong single-step answer.
+        pct_count = len(_PERCENT.findall(p))
+        multi_step = any(w in low for w in _MULTISTEP_WORDS)
+        single_clean = pct_count <= 1 and not multi_step
+
         # 1) "X% of Y"
         m = _PCT_OF.search(p)
-        if m:
+        if m and single_clean:
             pct, base = _num(m.group(1)), _num(m.group(2))
             currency = "$" in p[max(0, m.start() - 2): m.end() + 2]
             return Solution(_fmt(pct / 100.0 * base, currency), confidence=0.95)
 
-        # 2) percentage discount / increase on a $ price
-        pct_m = _PERCENT.search(p)
-        price_m = _PRICE.search(p)
-        if pct_m and price_m:
-            pct = _num(pct_m.group(1))
-            price = _num(price_m.group(1))
-            if any(w in low for w in _DISCOUNT_WORDS):
-                return Solution(_fmt(price * (1 - pct / 100.0), True), confidence=0.9)
-            if any(w in low for w in _INCREASE_WORDS):
-                return Solution(_fmt(price * (1 + pct / 100.0), True), confidence=0.9)
+        # 2) percentage discount / increase on a $ price (single, clean step only)
+        if single_clean:
+            pct_m = _PERCENT.search(p)
+            price_m = _PRICE.search(p)
+            if pct_m and price_m:
+                pct = _num(pct_m.group(1))
+                price = _num(price_m.group(1))
+                if any(w in low for w in _DISCOUNT_WORDS):
+                    return Solution(_fmt(price * (1 - pct / 100.0), True), confidence=0.9)
+                if any(w in low for w in _INCREASE_WORDS):
+                    return Solution(_fmt(price * (1 + pct / 100.0), True), confidence=0.9)
 
         # 3) a bare arithmetic expression, e.g. "12 * (3 + 4)"
         core = p.rstrip("=?. ")
@@ -105,10 +114,170 @@ class MathSolver:
         return None  # abstain -> escalate
 
 
+# --- sentiment solver (T22) -----------------------------------------------
+
+_POS_WORDS = frozenset("""
+good great excellent amazing awesome wonderful fantastic love loved loving like
+liked best perfect happy pleased satisfied enjoy enjoyed enjoyable superb brilliant
+outstanding delightful positive recommend recommended nice beautiful comfortable
+fast reliable helpful impressive worth flawless smooth
+""".split())
+
+_NEG_WORDS = frozenset("""
+bad terrible awful horrible worst hate hated dislike disappointing disappointed
+poor slow broken useless waste wasted defective faulty annoying frustrating
+frustrated unhappy sad angry disgusting cheap overpriced dies died fails failed
+failing crash crashed buggy unreliable uncomfortable regret avoid
+""".split())
+
+_NEGATORS = frozenset("not no never n't isn't wasn't don't didn't doesn't cannot can't".split())
+
+_WORD_RE = re.compile(r"[a-z']+")
+
+
+class SentimentSolver:
+    """Lexicon sentiment with simple negation handling.
+
+    Confidence scales with the margin between positive and negative hits relative
+    to total sentiment-bearing words. Abstains when no sentiment words are found.
+    """
+
+    category = Category.SENTIMENT
+
+    def try_solve(self, prompt: str) -> Optional[Solution]:
+        words = _WORD_RE.findall(prompt.lower())
+        if not words:
+            return None
+
+        pos = neg = 0
+        triggers: list[str] = []
+        for i, w in enumerate(words):
+            negated = i > 0 and words[i - 1] in _NEGATORS
+            if w in _POS_WORDS:
+                triggers.append(w)
+                if negated:
+                    neg += 1
+                else:
+                    pos += 1
+            elif w in _NEG_WORDS:
+                triggers.append(w)
+                if negated:
+                    pos += 1
+                else:
+                    neg += 1
+
+        total = pos + neg
+        if total == 0:
+            return None  # no signal -> escalate
+
+        if pos > neg:
+            label = "Positive"
+        elif neg > pos:
+            label = "Negative"
+        else:
+            label = "Neutral"
+
+        margin = abs(pos - neg) / total
+        confidence = 0.55 + 0.4 * margin  # 0.55..0.95
+        reason = ", ".join(dict.fromkeys(triggers[:3]))
+        answer = f"{label}. Key indicators: {reason}." if reason else label
+        return Solution(answer, confidence=round(confidence, 3))
+
+
+# --- NER solver (T23) ------------------------------------------------------
+
+_MONTHS = (
+    "january february march april may june july august september october "
+    "november december jan feb mar apr jun jul aug sep sept oct nov dec"
+).split()
+_DATE_RES = [
+    re.compile(r"\b(\d{4}-\d{2}-\d{2})\b"),
+    re.compile(r"\b(\d{1,2}/\d{1,2}/\d{2,4})\b"),
+    re.compile(
+        r"\b((?:" + "|".join(_MONTHS) + r")\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})\b",
+        re.I,
+    ),
+    re.compile(r"\b(\d{1,2}\s+(?:" + "|".join(_MONTHS) + r")\.?\s+\d{4})\b", re.I),
+]
+_ORG_SUFFIX = re.compile(
+    r"\b([A-Z][A-Za-z.&]+(?:\s+[A-Z][A-Za-z.&]+)*\s+"
+    r"(?:Inc|Incorporated|Corp|Corporation|Ltd|LLC|LLP|Company|Co|Group|Bank|"
+    r"University|Institute|Foundation))\b"
+)
+# Consecutive capitalized tokens (candidate proper nouns).
+_PROPER = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b")
+_STOP_STARTS = frozenset(
+    "The A An In On At Of For And But Or If When Who What Where Why How "
+    "Extract Summarise Summarize Classify Calculate Write Find".split()
+)
+
+
+class NERSolver:
+    """Best-effort local NER into the required JSON shape.
+
+    Dates are matched with high-precision regexes (reliable). Persons/orgs/
+    locations are heuristic (capitalized sequences, org suffixes), so overall
+    confidence is kept modest — the cascade escalates when the caller's threshold
+    isn't met.
+    """
+
+    category = Category.NER
+
+    def try_solve(self, prompt: str) -> Optional[Solution]:
+        # Work on the content after a leading instruction/colon if present.
+        text = prompt.split(":", 1)[1] if ":" in prompt else prompt
+
+        dates: list[str] = []
+        for rx in _DATE_RES:
+            dates.extend(m.group(1) for m in rx.finditer(text))
+
+        orgs = [m.group(1) for m in _ORG_SUFFIX.finditer(text)]
+
+        proper: list[str] = []
+        for m in _PROPER.finditer(text):
+            span = m.group(1)
+            if span.split()[0] in _STOP_STARTS:
+                continue
+            if any(span in o or o in span for o in orgs):
+                continue
+            proper.append(span)
+
+        # Two-token capitalized spans -> likely person names.
+        persons = [s for s in proper if len(s.split()) >= 2]
+        singles = [s for s in proper if len(s.split()) == 1]
+
+        found = len(dates) + len(orgs) + len(persons) + len(singles)
+        if found == 0:
+            return None  # nothing extractable -> escalate
+
+        entities = {
+            "person": _dedup(persons),
+            "org": _dedup(orgs),
+            "location": _dedup(singles),  # heuristic: lone capitalized -> location
+            "date": _dedup(dates),
+        }
+        answer = _compact_json(entities)
+        # Confidence is modest: dates reliable, others heuristic.
+        confidence = 0.6 if (persons or orgs or dates) else 0.45
+        return Solution(answer, confidence=confidence)
+
+
+def _dedup(items: list[str]) -> list[str]:
+    return list(dict.fromkeys(i.strip() for i in items if i.strip()))
+
+
+def _compact_json(entities: dict[str, list[str]]) -> str:
+    import json
+
+    return json.dumps(entities, ensure_ascii=False, separators=(",", ":"))
+
+
 # --- registry --------------------------------------------------------------
 
 _SOLVERS: dict[Category, list[LocalSolver]] = {
     Category.MATH: [MathSolver()],
+    Category.SENTIMENT: [SentimentSolver()],
+    Category.NER: [NERSolver()],
 }
 
 
