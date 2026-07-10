@@ -2,13 +2,26 @@
 
 Single source of truth for architecture, milestones, and trackable subtasks.
 
-> **Strategy pivot (2026-07-09):** The organizers (LabLab Admin) confirmed a
-> task's final answer **may be produced by a local model**, as long as it meets
-> the accuracy threshold — and that the _goal_ is to use local models as much as
-> possible to minimize Fireworks API calls. Since local inference counts as
-> **zero tokens**, the winning design is a **local-first confidence cascade**:
-> answer everything we can locally, and call Fireworks only when a local answer
-> can't confidently clear the gate. This reshapes M3+ below.
+> **Strategy pivot (2026-07-09):** LabLab Admin confirmed a task's final answer
+> **may be produced by a local model**; the goal is to use local models to
+> minimize Fireworks calls (local inference = 0 tokens). Original design: a
+> local-first confidence cascade.
+>
+> **HARDWARE REALITY (2026-07-10) — critical:** the grading box is **CPU-only,
+> 4 GB RAM, 2 vCPU, no GPU.** A 7–9 GB local LLM (e.g. `gemma4:e4b`/`e2b`)
+> **cannot load** in 4 GB, and even a ~2 GB model is too slow/RAM-heavy on
+> 2 vCPU to be worth it. So the "answer everything with local gemma" result we
+> measured on a dev machine **does NOT transfer to grading.**
+>
+> **Revised grading architecture:** bundle **no general local LLM**. Keep the
+> deterministic local solvers (math / sentiment / NER via spaCy) — they use
+> negligible RAM, run instantly, and answer their categories at **0 tokens**.
+> Everything needing a real LLM (factual, summarization, logic, code, hard math)
+> goes to the **Fireworks allowed models**, with tokens minimized (terse prompts,
+> tight `max_tokens`, thinking disabled, per-category model routing). The code
+> already degrades to this automatically when no local LLM is configured
+> (`LocalLLM.from_env()` returns None → cascade = deterministic → Fireworks).
+> The local gemma path remains available for richer dev/self-host environments.
 
 ---
 
