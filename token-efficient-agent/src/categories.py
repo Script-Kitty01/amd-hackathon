@@ -28,9 +28,21 @@ class Category(str, Enum):
     CODE_GEN = "code_gen"
 
 
-# Preferred model index into config.models, per category.
-# Default everything to 0 (cheapest) until launch-day eval says otherwise.
-MODEL_PREFERENCE: dict[Category, int] = {c: 0 for c in Category}
+# Calibrated per-category model index into config.models. Populated by the
+# launch-day sweep (via load_model_preference); empty = not yet calibrated.
+MODEL_PREFERENCE: dict[Category, int] = {}
+
+# Fallback preference by model-name substring, matched against ALLOWED_MODELS at
+# runtime. COMPLIANT: we only ever return a model that IS in ALLOWED_MODELS — the
+# hints just express which allowed model suits a category (e.g. a code-specialised
+# model for code, a reasoning model for logic/math). Used only when the sweep
+# hasn't set a calibrated preference for the category.
+MODEL_HINTS: dict[Category, tuple[str, ...]] = {
+    Category.CODE_DEBUG: ("code", "kimi"),
+    Category.CODE_GEN: ("code", "kimi"),
+    Category.LOGIC: ("minimax", "m3", "31b"),
+    Category.MATH: ("minimax", "m3", "31b"),
+}
 
 _PREF_ENV = "MODEL_PREFERENCE_PATH"
 _DEFAULT_PREF_PATH = "config/model_preference.json"
@@ -58,10 +70,21 @@ def load_model_preference(path: str | None = None) -> None:
 
 
 def select_model(category: Category, models: list[str]) -> str:
-    """Pick the preferred allowed model for a category, clamped to range."""
-    idx = MODEL_PREFERENCE.get(category, 0)
-    idx = max(0, min(idx, len(models) - 1))
-    return models[idx]
+    """Pick the preferred allowed model for a category.
+
+    Precedence: calibrated sweep index > name-hint match within ALLOWED_MODELS >
+    first allowed model. Only ever returns a model present in `models`.
+    """
+    if category in MODEL_PREFERENCE:
+        idx = max(0, min(MODEL_PREFERENCE[category], len(models) - 1))
+        return models[idx]
+
+    for hint in MODEL_HINTS.get(category, ()):
+        for m in models:
+            if hint in m.lower():
+                return m
+
+    return models[0]
 
 
 def escalation_model(models: list[str]) -> str:

@@ -63,8 +63,11 @@ Single source of truth for architecture, milestones, and trackable subtasks.
 3. **Gemma 4** — bonus for best use. Running gemma **locally** as the primary
    generative tier is now both the token strategy _and_ the bonus. AMD hardware
    (ROCm) is the likely target for local inference.
-4. **Fireworks model IDs** — unknown until `ALLOWED_MODELS` is published at
-   launch; fallback-tier tuning is launch-day work.
+4. **Fireworks model IDs** — KNOWN: `minimax-m3`, `kimi-k2p7-code`,
+   `gemma-4-31b-it`, `gemma-4-26b-a4b-it`, `gemma-4-31b-it-nvfp4`. Fallback
+   prefers `kimi-k2p7-code` (code) and `minimax-m3` (reasoning) via MODEL_HINTS;
+   the launch-day sweep confirms/overrides per category. 3 of 5 are Gemma 4 —
+   same family as the local `gemma4:e4b`, reinforcing the gemma-4 bonus story.
 
 ---
 
