@@ -113,6 +113,46 @@ def run_single(dataset_path: str) -> None:
         print(f"judge tokens: {judge.total_tokens} (not counted toward agent score)")
 
 
+def run_cloud_only(dataset_path: str) -> None:
+    """Baseline: send every task straight to the cloud fallback (no local tiers).
+
+    Produces the comparison figure for the write-up: cloud-only tokens/accuracy
+    vs. the cascade's. Requires FIREWORKS_* to be configured.
+    """
+    _load_dotenv()
+    items = _load(dataset_path)
+
+    solver = _build_fireworks_solver()
+    if solver is None:
+        print("cloud-only requires FIREWORKS_* env vars (the cloud fallback). Aborting.")
+        return
+    judge = Judge.from_env()
+    print(f"CLOUD-ONLY baseline: judge={'on' if judge else 'off (substring match)'}")
+
+    report = EvalReport()
+    start = time.time()
+    for item in items:
+        prompt = str(item["prompt"])
+        out = solver.solve(str(item["task_id"]), prompt)
+        expected = item.get("expected")
+        passed = judge.passed(prompt, out.answer, expected) if judge else check_match(out.answer, expected)
+        report.records.append(
+            EvalRecord(
+                task_id=out.task_id,
+                category=out.category.value,
+                answer=out.answer,
+                total_tokens=out.total_tokens,
+                passed=passed,
+                tier="cloud",
+            )
+        )
+        print(f"  {out.task_id:<22} cloud        "
+              f"{'PASS' if passed else 'FAIL'}  tokens={out.total_tokens}")
+
+    print("\n" + report.summary())
+    print(f"wall time:    {time.time() - start:.1f}s")
+
+
 # --- model sweep (T8) ------------------------------------------------------
 
 def _is_gemma(model_id: str) -> bool:
@@ -218,6 +258,9 @@ def main() -> None:
     if args and args[0] == "--sweep":
         dataset = args[1] if len(args) > 1 else DEFAULT_DATASET
         run_sweep(dataset)
+    elif args and args[0] == "--cloud-only":
+        dataset = args[1] if len(args) > 1 else DEFAULT_DATASET
+        run_cloud_only(dataset)
     else:
         dataset = args[0] if args else DEFAULT_DATASET
         run_single(dataset)

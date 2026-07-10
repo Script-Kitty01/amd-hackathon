@@ -59,7 +59,7 @@ class EvalReport:
         tiered = [r for r in self.records if r.tier]
         if not tiered:
             return None
-        local = sum(1 for r in tiered if r.tier != "fireworks")
+        local = sum(1 for r in tiered if r.tier not in ("fireworks", "cloud"))
         return local / len(tiered)
 
     def summary(self) -> str:
