@@ -13,15 +13,21 @@ Single source of truth for architecture, milestones, and trackable subtasks.
 > 2 vCPU to be worth it. So the "answer everything with local gemma" result we
 > measured on a dev machine **does NOT transfer to grading.**
 >
-> **Revised grading architecture:** bundle **no general local LLM**. Keep the
-> deterministic local solvers (math / sentiment / NER via spaCy) — they use
-> negligible RAM, run instantly, and answer their categories at **0 tokens**.
-> Everything needing a real LLM (factual, summarization, logic, code, hard math)
-> goes to the **Fireworks allowed models**, with tokens minimized (terse prompts,
-> tight `max_tokens`, thinking disabled, per-category model routing). The code
-> already degrades to this automatically when no local LLM is configured
-> (`LocalLLM.from_env()` returns None → cascade = deterministic → Fireworks).
-> The local gemma path remains available for richer dev/self-host environments.
+> **Final grading architecture (2026-07-10, organizers confirmed a bundled local
+> model is allowed and need NOT be in ALLOWED_MODELS):**
+>
+> - **Local solvers (0 tokens):** math / sentiment / NER (spaCy) — negligible RAM.
+> - **Local LLM tier (0 tokens):** **`llama3.2:3b`** (~2 GB, fits 4 GB) bundled in
+>   the image via Ollama (see Dockerfile) — answers factual / summarization /
+>   sentiment. Chosen over gemma2:2b (87.5%) for accuracy margin (95.8% on the
+>   fresh validation set). A 7-9 GB Gemma 4 can't load in 4 GB, so the local model
+>   is a small non-gemma model; the **gemma-4 bonus is captured via Fireworks**.
+> - **Fireworks tier (tokens):** the 5 ALLOWED_MODELS handle logic / code / hard
+>   math, with lean prompts, tight `max_tokens`, thinking disabled, per-category
+>   routing (kimi=code, minimax=reasoning).
+> - Measured (grading-realistic, 24 fresh tasks): **~931 tokens, 95.8%** with the
+>   local LLM vs **1834 tokens** Fireworks-only — the bundled 3B roughly halves
+>   tokens. Image bundles the model (<10 GB); `.env` is never included.
 
 ---
 
