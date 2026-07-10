@@ -79,8 +79,8 @@
   },
   {
     "task_id": "logic_complex",
-    "prompt": "Four friends sit in a row. Dana is not at either end. Evan is immediately to the right of Dana. Farah is at the left end. Who sits at the right end?",
-    "expected": "",
+    "prompt": "Four friends - Dana, Evan, Farah, and Gil - sit in a row of four seats numbered 1 (left) to 4 (right). Farah sits at seat 1. Dana is not at either end. Evan sits immediately to the right of Dana. Gil is not next to Farah. Who sits at the right end (seat 4)?",
+    "expected": "Gil",
     "difficulty": "complex"
   },
   {

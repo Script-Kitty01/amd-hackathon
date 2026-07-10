@@ -48,8 +48,10 @@ _KEYWORDS: dict[Category, tuple[str, ...]] = {
         "named entit", "extract", "entities", "person, org", "recognition",
     ),
     Category.MATH: (
-        "calculate", "percent", "%", "how many", "how much", "total",
-        "average", "sum of", "projection", "compute",
+        # Note: dropped bare "average"/"total" — too common in prose (e.g.
+        # "average O(1)") and they misrouted explanations to math.
+        "calculate", "percent", "%", "how many", "how much",
+        "sum of", "projection", "compute", "product of", "divided by",
     ),
     Category.FACTUAL: (
         "explain", "what is", "what are", "who ", "how does", "how do",

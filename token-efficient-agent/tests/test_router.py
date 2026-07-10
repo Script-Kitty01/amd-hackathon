@@ -33,6 +33,12 @@ def test_factual_default():
     assert classify("Who painted the Mona Lisa?") in (Category.FACTUAL, Category.LOGIC)
 
 
+def test_average_in_prose_does_not_route_to_math():
+    # "average O(1)" is not a math task — must not misroute to MATH.
+    prompt = "Explain how a hash table achieves average O(1) lookups and when it degrades to O(n)."
+    assert classify(prompt) == Category.FACTUAL
+
+
 def test_logic_ranking_puzzle():
     prompt = ("Alice, Bob, and Carol finished 1st, 2nd, 3rd in some order. "
               "Alice was not last. Carol beat Bob. Who came first?")
