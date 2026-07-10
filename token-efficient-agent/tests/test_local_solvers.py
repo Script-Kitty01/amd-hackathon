@@ -109,3 +109,35 @@ def test_ner_extracts_person_org_date():
 
 def test_ner_abstains_when_nothing_found():
     assert NERSolver().try_solve("please summarise the following text quickly") is None
+
+
+# --- spaCy NER (T23 upgrade) ---
+
+import pytest
+
+from src.local_solvers import SpacyNERSolver, _get_spacy
+
+
+@pytest.mark.skipif(_get_spacy() is None, reason="spaCy en_core_web_sm not installed")
+def test_spacy_ner_extracts_entities():
+    import json
+
+    s = SpacyNERSolver().try_solve(
+        "Extract named entities from: Satya Nadella, CEO of Microsoft, visited Paris on March 3, 2024."
+    )
+    assert s is not None
+    data = json.loads(s.answer)
+    assert set(data.keys()) == {"person", "org", "location", "date"}
+    assert any("Nadella" in p for p in data["person"])
+    assert any("Microsoft" in o for o in data["org"])
+    assert any("Paris" in loc for loc in data["location"])
+    assert any("2024" in d for d in data["date"])
+
+
+def test_ner_registry_prefers_spacy_then_heuristic():
+    from src.categories import Category
+    from src.local_solvers import NERSolver, solvers_for
+
+    ner_solvers = solvers_for(Category.NER)
+    assert isinstance(ner_solvers[0], SpacyNERSolver)
+    assert any(isinstance(s, NERSolver) for s in ner_solvers)

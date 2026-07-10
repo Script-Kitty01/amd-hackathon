@@ -24,7 +24,7 @@ from .categories import Category
 _DEFAULT_LOCAL_SOLVER: dict[Category, float] = {
     Category.MATH: 0.85,       # deterministic parse -> trust it
     Category.SENTIMENT: 0.70,  # lexicon with clear margin
-    Category.NER: 0.90,        # heuristic -> strict, usually escalate
+    Category.NER: 0.80,        # spaCy statistical NER (0.85) accepted; heuristic escalates
 }
 
 # Min confidence to accept a LOCAL LLM answer. 0.99 => effectively always escalate.

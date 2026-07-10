@@ -138,7 +138,7 @@ Points: 1 trivial · 2 small · 3 moderate · 5 substantial · 8 large.
 - [x] **T20** (5) Local solver interface + registry in `src/local_solvers.py`: `try_solve(prompt) -> Solution(answer, confidence) | None (abstain)`, keyed by category. No third-party deps.
 - [x] **T21** (3) Deterministic math solver: `X% of Y`, percentage discount/increase on a price, bare arithmetic; abstains on anything unclear to protect the gate. 8 tests.
 - [x] **T22** (3) Sentiment: local lexicon solver with negation handling; confidence from margin. Abstains without signal.
-- [x] **T23** (3) NER: local heuristic solver (regex dates + org suffixes + proper-noun spans) → compact JSON; modest confidence so it escalates when unsure. (spaCy can swap in later.)
+- [x] **T23** (3) NER: spaCy `en_core_web_sm` solver (conf 0.85, accepted locally) with the regex heuristic as fallback if the model is absent → compact JSON. Now answers locally at 0 tokens.
 - [x] **T24** (8) Local LLM tier (`src/local_llm.py`): OpenAI-compatible client for a local endpoint (Ollama/gemma), enabled via env, self-consistency confidence, graceful abstain when absent. Tokens ignored (local=0).
 - [~] **T25** (3) Summarization/factual handled generically by the local LLM tier. Map-reduce/refine for over-long single inputs = deferred nice-to-have.
 

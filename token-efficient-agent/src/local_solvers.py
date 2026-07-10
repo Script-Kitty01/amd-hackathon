@@ -272,12 +272,70 @@ def _compact_json(entities: dict[str, list[str]]) -> str:
     return json.dumps(entities, ensure_ascii=False, separators=(",", ":"))
 
 
+# --- spaCy NER solver (T23, upgrade) --------------------------------------
+
+_SPACY_NLP = None
+_SPACY_TRIED = False
+
+_SPACY_LABEL_MAP = {
+    "PERSON": "person",
+    "ORG": "org",
+    "GPE": "location",
+    "LOC": "location",
+    "FAC": "location",
+    "DATE": "date",
+    "TIME": "date",
+}
+
+
+def _get_spacy():
+    """Lazily load en_core_web_sm once. Returns None if spaCy/model unavailable."""
+    global _SPACY_NLP, _SPACY_TRIED
+    if _SPACY_TRIED:
+        return _SPACY_NLP
+    _SPACY_TRIED = True
+    try:
+        import spacy
+
+        _SPACY_NLP = spacy.load("en_core_web_sm", disable=["lemmatizer", "tagger", "parser"])
+    except Exception:
+        _SPACY_NLP = None
+    return _SPACY_NLP
+
+
+class SpacyNERSolver:
+    """NER via spaCy's statistical model — more reliable than the regex heuristic.
+
+    Abstains (None) if spaCy or the model isn't installed, so the heuristic
+    NERSolver runs as a fallback.
+    """
+
+    category = Category.NER
+
+    def try_solve(self, prompt: str) -> Optional[Solution]:
+        nlp = _get_spacy()
+        if nlp is None:
+            return None
+        text = prompt.split(":", 1)[1] if ":" in prompt else prompt
+        doc = nlp(text)
+        buckets: dict[str, list[str]] = {"person": [], "org": [], "location": [], "date": []}
+        for ent in doc.ents:
+            key = _SPACY_LABEL_MAP.get(ent.label_)
+            if key:
+                buckets[key].append(ent.text.strip())
+        buckets = {k: _dedup(v) for k, v in buckets.items()}
+        if not any(buckets.values()):
+            return None
+        return Solution(_compact_json(buckets), confidence=0.85)
+
+
 # --- registry --------------------------------------------------------------
 
+# NER: try spaCy first, fall back to the regex heuristic if the model is absent.
 _SOLVERS: dict[Category, list[LocalSolver]] = {
     Category.MATH: [MathSolver()],
     Category.SENTIMENT: [SentimentSolver()],
-    Category.NER: [NERSolver()],
+    Category.NER: [SpacyNERSolver(), NERSolver()],
 }
 
 

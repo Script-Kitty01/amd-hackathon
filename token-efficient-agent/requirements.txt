@@ -1,5 +1,9 @@
-# Runtime dependency: OpenAI-compatible client used for both the Fireworks
-# fallback and the local LLM endpoint (Ollama exposes an OpenAI-compatible API).
+# Runtime dependencies.
+# OpenAI-compatible client for the Fireworks fallback and the local LLM endpoint.
 openai>=1.40.0
+
+# Local NER (statistical). The model is installed separately in the Dockerfile:
+#   python -m spacy download en_core_web_sm
+spacy>=3.8.0
 
 # (dev only, not shipped in the image: pytest)
