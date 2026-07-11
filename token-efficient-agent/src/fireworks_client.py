@@ -24,6 +24,7 @@ class LLMResult:
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+    finish_reason: str = ""  # "stop" (complete) | "length" (truncated) | ...
 
 
 def _is_retryable(exc: Exception) -> bool:
@@ -69,11 +70,13 @@ class FireworksClient:
         """Single deterministic chat completion. Retries transient/rate-limit errors."""
         resp = self._create_with_retry(model, system, user, max_tokens)
         usage = resp.usage
+        choice = resp.choices[0]
         return LLMResult(
-            text=(resp.choices[0].message.content or "").strip(),
+            text=(choice.message.content or "").strip(),
             prompt_tokens=getattr(usage, "prompt_tokens", 0),
             completion_tokens=getattr(usage, "completion_tokens", 0),
             total_tokens=getattr(usage, "total_tokens", 0),
+            finish_reason=getattr(choice, "finish_reason", "") or "",
         )
 
     def _create_once(self, model: str, system: str, user: str, max_tokens: int):

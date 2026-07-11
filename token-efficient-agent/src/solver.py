@@ -20,9 +20,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .categories import Category, escalation_model, select_model
+from .compress import compress
 from .config import Config
 from .prompts import spec_for
 from .router import route
+from .validate import is_valid
 
 if TYPE_CHECKING:
     from .fireworks_client import FireworksClient
@@ -67,20 +69,27 @@ class Solver:
         r = route(prompt)
         spec = spec_for(r.category)
         attempts = self._plan_attempts(r.category, r.complexity, r.ambiguous)
+        # Compress the prompt for the remote call only (routing/caching used the
+        # original). Meaning-preserving; saves input tokens on every call.
+        user = compress(prompt)
 
         total_tokens = 0
+        last_text = ""  # best non-empty answer seen, used if all attempts fail validation
         for model in attempts:
             try:
                 result = self._client.complete(
                     model=model,
                     system=spec.system,
-                    user=prompt,
+                    user=user,
                     max_tokens=spec.max_tokens,
                 )
-                total_tokens += result.total_tokens
-                if result.text:
-                    return SolveOutcome(task_id, result.text, r.category, total_tokens)
             except Exception:
                 continue  # try the next tier
+            total_tokens += result.total_tokens
+            truncated = result.finish_reason == "length"
+            if result.text and not truncated and is_valid(r.category, result.text):
+                return SolveOutcome(task_id, result.text, r.category, total_tokens)
+            if result.text:
+                last_text = result.text  # keep as fallback; escalate for a clean one
 
-        return SolveOutcome(task_id, _FALLBACK, r.category, total_tokens)
+        return SolveOutcome(task_id, last_text or _FALLBACK, r.category, total_tokens)

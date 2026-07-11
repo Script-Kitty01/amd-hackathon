@@ -101,6 +101,18 @@ def test_dedup_cache_reuses_identical_prompt():
     assert fw.called == 1  # Fireworks hit only once for the duplicate
 
 
+def test_cache_normalizes_prompt():
+    # Prompts differing only in case/whitespace share one computation.
+    fw = FakeFireworks(answer="answer", tokens=40)
+    c = Cascade(fireworks_solver=fw)
+    first = c.solve("a", "Explain what a binary search tree is.")
+    second = c.solve("b", "  explain   WHAT a Binary Search Tree   is.  ")
+    assert first.tier == "fireworks" and first.total_tokens == 40
+    assert second.tier == "cache" and second.total_tokens == 0
+    assert second.answer == first.answer
+    assert fw.called == 1
+
+
 def test_sentiment_escalates_to_fireworks():
     # Accuracy-first baseline: the local lexicon sentiment solver is disabled,
     # so sentiment tasks go to Fireworks for a reliable, judge-friendly label.

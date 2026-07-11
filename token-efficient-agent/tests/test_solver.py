@@ -22,10 +22,14 @@ COMPLEX_LOGIC = (
 class FakeResult:
     text: str
     total_tokens: int
+    finish_reason: str = "stop"
 
 
 class FakeClient:
-    """Returns a configured (text, tokens) per model, or raises if given an Exception."""
+    """Returns a configured response per model, or raises if given an Exception.
+
+    A response is (text, tokens) or (text, tokens, finish_reason).
+    """
 
     def __init__(self, responses):
         self.responses = responses
@@ -36,8 +40,9 @@ class FakeClient:
         r = self.responses[model]
         if isinstance(r, Exception):
             raise r
-        text, tokens = r
-        return FakeResult(text=text, total_tokens=tokens)
+        text, tokens = r[0], r[1]
+        finish_reason = r[2] if len(r) > 2 else "stop"
+        return FakeResult(text=text, total_tokens=tokens, finish_reason=finish_reason)
 
 
 def _cfg(models):
@@ -100,3 +105,28 @@ def test_single_model_no_escalation():
     out = solver.solve("t6", EASY_SENTIMENT)
     assert client.calls == ["only"]
     assert out.answer == "Positive."
+
+
+def test_truncated_answer_escalates():
+    # A primary answer cut off by max_tokens (finish_reason == "length") is
+    # treated as unusable and escalates; both calls are counted.
+    client = FakeClient(
+        {"minimax-m3": ("cut off", 50, "length"), "kimi-k2p7-code": ("Full answer.", 30)}
+    )
+    solver = Solver(_cfg(["minimax-m3", "kimi-k2p7-code"]), client)
+    out = solver.solve("t7", "Explain what recursion is.")
+    assert client.calls == ["minimax-m3", "kimi-k2p7-code"]
+    assert out.answer == "Full answer."
+    assert out.total_tokens == 80
+
+
+def test_invalid_ner_escalates():
+    # A NER answer with no recognizable structure is invalid and escalates to a
+    # model that returns compact JSON.
+    client = FakeClient(
+        {"m0": ("just some names", 20), "m1": ('{"person":["Ada"]}', 25)}
+    )
+    solver = Solver(_cfg(["m0", "m1"]), client)
+    out = solver.solve("t8", "Extract named entities from: Ada Lovelace in London.")
+    assert client.calls == ["m0", "m1"]
+    assert out.answer == '{"person":["Ada"]}'

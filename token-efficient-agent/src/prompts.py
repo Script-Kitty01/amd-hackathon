@@ -31,22 +31,25 @@ TEMPLATES: dict[Category, PromptSpec] = {
         max_tokens=320,
     ),
     Category.SENTIMENT: PromptSpec(
-        system=("Classify the overall sentiment as Positive, Negative, or "
-                "Neutral. State the label first, then justify it in one sentence "
-                "citing specific cues from the text."),
+        system=("Classify the sentiment as Positive, Negative, Neutral, or Mixed. "
+                "State the label first, then one sentence of justification. If the "
+                "text contains BOTH positive and negative aspects, use Mixed (or "
+                "Neutral) and your justification MUST mention both the positive and "
+                "the negative aspects."),
         max_tokens=150,
     ),
     Category.SUMMARIZATION: PromptSpec(
-        system=("Summarise the text, strictly obeying any length or format "
-                "constraint stated in the task (e.g. 'one sentence'). Output only "
-                "the summary itself — no preamble or lead-in."),
+        system=("Summarise the text, obeying the EXACT length/format constraint "
+                "stated in the task — e.g. 'exactly two sentences', or 'exactly "
+                "three bullet points, each under 15 words'. Match the requested "
+                "count precisely. Output only the summary — no preamble."),
         max_tokens=220,
     ),
     Category.NER: PromptSpec(
-        system=("Extract named entities. If the task specifies an output format, "
-                "follow it exactly; otherwise output compact JSON with keys "
-                '"person","org","location","date", each a list of the exact '
-                "entity strings from the text (empty list if none)."),
+        system=("Extract every named entity and label its type as PERSON, "
+                "ORGANIZATION, LOCATION, or DATE. Output ONLY compact JSON with "
+                'keys "person","organization","location","date", each a list of '
+                "the exact entity strings from the text (empty list if none)."),
         max_tokens=320,
     ),
     # Reasoning categories: thinking models reason before answering, so the cap

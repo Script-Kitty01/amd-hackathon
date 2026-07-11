@@ -1,11 +1,12 @@
 # Build the submission image and report its size. Run on a machine with Docker.
 # The registry limit is 10 GB *compressed*; `docker images` shows the larger
-# uncompressed size, so treat it as an upper bound.
+# uncompressed size, so treat it as an upper bound. The lean image (python-slim,
+# deterministic solvers + Fireworks, no bundled model) is well under the limit.
 
 $ErrorActionPreference = "Stop"
 $IMAGE = "token-efficient-agent"
 
-Write-Host "Building $IMAGE (bundles llama3.2:3b via Ollama)..." -ForegroundColor Cyan
+Write-Host "Building $IMAGE (lean: deterministic solvers + Fireworks, no bundled model)..." -ForegroundColor Cyan
 docker build -t $IMAGE .
 
 Write-Host "`nUncompressed image size:" -ForegroundColor Cyan

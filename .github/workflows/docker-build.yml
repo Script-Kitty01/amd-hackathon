@@ -1,8 +1,9 @@
 name: Build and push agent image
 
-# Builds the Track 1 submission image (bundled llama3.2:3b + agent) on GitHub's
-# runners and pushes it to GHCR — no local Docker needed. The pushed image URL
-# is what you submit (make the package public first: repo -> Packages -> settings).
+# Builds the lean Track 1 submission image (deterministic solvers + Fireworks,
+# no bundled model) on GitHub's runners and pushes it to GHCR — no local Docker
+# needed. The pushed image URL is what you submit (make the package public
+# first: repo -> Packages -> settings).
 
 on:
   workflow_dispatch: {}

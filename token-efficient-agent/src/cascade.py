@@ -12,6 +12,7 @@ how many (Fireworks) tokens it cost, for eval/observability.
 
 from __future__ import annotations
 
+import re
 import threading
 from dataclasses import dataclass
 from typing import Optional
@@ -51,8 +52,8 @@ class Cascade:
         self._key_locks: dict[str, threading.Lock] = {}
 
     def solve(self, task_id: str, prompt: str) -> CascadeOutcome:
-        """Cached entry point: identical prompts reuse the first result (0 extra tokens)."""
-        key = prompt.strip()
+        """Cached entry point: equivalent prompts reuse the first result (0 extra tokens)."""
+        key = _normalize_key(prompt)
 
         with self._cache_guard:
             hit = self._cache.get(key)
@@ -118,3 +119,12 @@ def _better(current: Optional[Solution], candidate: Solution) -> Solution:
 def _reuse(hit: CascadeOutcome, task_id: str) -> CascadeOutcome:
     """Reuse a cached answer for a duplicate prompt — no additional tokens."""
     return CascadeOutcome(task_id, hit.answer, hit.category, 0, "cache")
+
+
+_WS = re.compile(r"\s+")
+
+
+def _normalize_key(prompt: str) -> str:
+    """Cache key: whitespace-collapsed, lowercased — so trivially-equivalent
+    prompts (spacing/case) share one computation. In-run only; nothing persisted."""
+    return _WS.sub(" ", prompt.strip().lower())
