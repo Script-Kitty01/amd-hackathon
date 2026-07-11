@@ -40,7 +40,7 @@ def main() -> None:
                 category=classify(item["prompt"]).value,
                 answer=outcome.answer,
                 total_tokens=outcome.total_tokens,
-                passed=check_match(outcome.answer, item.get("expected")),
+                passed=check_match(outcome.answer, item.get("expected"), classify(item["prompt"]).value),
             )
         )
 

@@ -74,12 +74,12 @@ Points scale: 1 trivial · 2 small · 3 moderate · 5 substantial · 8 large.
 - [ ] **T8** (5) Model sweep in `run_eval.py`: category × allowed model → accuracy/token table.
 - [ ] **T19** (3) 🎁 Bonus: maximize gemma-4 use — from the sweep, route every category where gemma clears the gate to gemma; add gemma-specific prompt tweaks; document the gemma usage for bonus credit.
 
-### M3 — Validate & test
+### M3 — Validate & test ✅ COMPLETE
 
-- [ ] **T9** (3) Verify scorer: accuracy gate + token accounting.
-- [ ] **T10** (3) Expand `sample_tasks.json`: all 8 categories + easy/complex variants.
-- [ ] **T11** (2) Harden fallback so `results.json` is always valid.
-- [ ] **T12** (3) Test concurrency + 10-min wall-clock budget under load.
+- [x] **T9** (3) Verify scorer: accuracy gate + token accounting.
+- [x] **T10** (3) Expand `sample_tasks.json`: all 8 categories + easy/complex variants.
+- [x] **T11** (2) Harden fallback so `results.json` is always valid.
+- [x] **T12** (3) Test concurrency + 10-min wall-clock budget under load.
 
 ### M4 — Optimization
 

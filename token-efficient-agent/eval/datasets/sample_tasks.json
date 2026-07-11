@@ -1,42 +1,82 @@
 [
   {
-    "task_id": "e1",
-    "prompt": "Explain what a hash table is and why lookups are fast.",
-    "expected": ""
+    "task_id": "factual_easy",
+    "prompt": "What is the capital of France?",
+    "expected": "Paris"
   },
   {
-    "task_id": "e2",
+    "task_id": "factual_complex",
+    "prompt": "Explain the concept of quantum entanglement and its implications for faster-than-light communication, keeping it under 3 sentences.",
+    "expected": "entanglement"
+  },
+  {
+    "task_id": "math_easy",
     "prompt": "A shirt costs $40 and is discounted by 25%. What is the final price?",
     "expected": "30"
   },
   {
-    "task_id": "e3",
+    "task_id": "math_complex",
+    "prompt": "If a factory produces 200 widgets per hour and runs 16 hours a day, and 5% of the widgets are defective, how many non-defective widgets are produced in a 5-day work week?",
+    "expected": "15200"
+  },
+  {
+    "task_id": "sentiment_easy",
     "prompt": "Classify the sentiment of this review: 'The battery dies in an hour, very disappointing.'",
     "expected": "Negative"
   },
   {
-    "task_id": "e4",
-    "prompt": "Summarise the following text in one sentence: The library extends opening hours during exam season to help students, adding weekend access and 24-hour study rooms.",
-    "expected": ""
+    "task_id": "sentiment_complex",
+    "prompt": "Classify the sentiment: 'The cinematography was breathtaking and the acting was superb, yet the convoluted plot left me completely disengaged by the third act.'",
+    "expected": "Negative"
   },
   {
-    "task_id": "e5",
+    "task_id": "sum_easy",
+    "prompt": "Summarise the following text in one sentence: The library extends opening hours during exam season to help students, adding weekend access and 24-hour study rooms.",
+    "expected": "library"
+  },
+  {
+    "task_id": "sum_complex",
+    "prompt": "Provide a 2-sentence summary: In 1912, the mayor of Tokyo initiated a gift of 3,020 cherry trees to the city of Washington, D.C. as a symbol of friendship between Japan and the United States. The trees were planted around the Tidal Basin and East Potomac Park. In 1965, the Japanese government sent another 3,800 trees. The annual National Cherry Blossom Festival celebrates this gift and the continued close relationship between the two nations.",
+    "expected": "cherry trees"
+  },
+  {
+    "task_id": "ner_easy",
     "prompt": "Extract named entities from: 'Satya Nadella, CEO of Microsoft, visited Paris on March 3, 2024.'",
     "expected": "Microsoft"
   },
   {
-    "task_id": "e6",
+    "task_id": "ner_complex",
+    "prompt": "Extract entities: 'In an unexpected move on Tuesday, Apple announced the acquisition of the Berlin-based AI startup, NeuralTech. The deal, spearheaded by Tim Cook, is expected to close in Q3 of 2025.'",
+    "expected": "Apple"
+  },
+  {
+    "task_id": "debug_easy",
     "prompt": "Find and fix the bug:\n```python\ndef add(a, b):\n    return a - b\n```",
     "expected": "a + b"
   },
   {
-    "task_id": "e7",
-    "prompt": "Alice, Bob, and Carol finished 1st, 2nd, 3rd in some order. Alice was not last. Carol beat Bob. Who came first?",
-    "expected": "Alice"
+    "task_id": "debug_complex",
+    "prompt": "Fix this code which should return the maximum value in a list of positive integers, but fails on empty lists.\n```python\ndef get_max(lst):\n    max_val = 0\n    for n in lst:\n        if n > max_val:\n            max_val = n\n    return max_val\n```",
+    "expected": "None"
   },
   {
-    "task_id": "e8",
-    "prompt": "Write a Python function that returns the nth Fibonacci number iteratively.",
+    "task_id": "logic_easy",
+    "prompt": "Alice, Bob, and Carol finished 1st, 2nd, 3rd in some order. Alice was not last. Carol beat Bob. Who came first?",
+    "expected": "Carol"
+  },
+  {
+    "task_id": "logic_complex",
+    "prompt": "Five friends (A, B, C, D, E) sit in a row. A is next to B but not C. D is next to E but not B. C sits on the far right. If E sits immediately to the left of C, who sits in the middle?",
+    "expected": "D"
+  },
+  {
+    "task_id": "codegen_easy",
+    "prompt": "Write a Python function `multiply_by_two(n)` that returns twice the input number.",
+    "expected": "def"
+  },
+  {
+    "task_id": "codegen_complex",
+    "prompt": "Write a Python function `flatten_dict(d)` that takes a nested dictionary and returns a flattened dictionary where keys are concatenated with dots. For example, `flatten_dict({'a': {'b': 1}})` returns `{'a.b': 1}`.",
     "expected": "def"
   }
 ]
