@@ -80,12 +80,14 @@ class FireworksClient:
         kwargs = {}
         if self._extra_body and model not in self._no_extra_body:
             kwargs["extra_body"] = self._extra_body
+        # Merge the instruction into a single user turn instead of a separate
+        # "system" role. Gemma-family models don't support a system role and can
+        # mishandle it; a merged user message is accepted by every model
+        # (minimax/kimi/gemma alike). This is the same approach the local LLM uses.
+        content = f"{system}\n\n{user}" if system else user
         return self._client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+            messages=[{"role": "user", "content": content}],
             max_tokens=max_tokens,
             temperature=0,
             **kwargs,

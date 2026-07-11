@@ -18,55 +18,57 @@ class PromptSpec:
     max_tokens: int
 
 
+# ACCURACY-FIRST budgets. Caps are generous so answers are never truncated
+# before they're complete (a truncated answer fails the judge). max_tokens is a
+# ceiling, not a target — well-formed answers stop early, so lean answers still
+# cost few tokens. Tighten these only after the accuracy gate is comfortably
+# cleared. Prompts request exactly what each category's judge looks for
+# (e.g. sentiment must JUSTIFY the label; summaries must obey the constraint).
 TEMPLATES: dict[Category, PromptSpec] = {
-    # Non-reasoning categories: push for the shortest correct output.
     Category.FACTUAL: PromptSpec(
-        system=("Answer in at most 3 short sentences. No preamble, no filler, "
-                "do not restate the question."),
-        max_tokens=130,
+        system=("Answer the question accurately and completely, explaining the "
+                "concept clearly in 2-4 sentences. No preamble."),
+        max_tokens=320,
     ),
     Category.SENTIMENT: PromptSpec(
-        system=("Classify the sentiment as Positive, Negative, or Neutral. Output "
-                "the label, then a reason of at most 6 words."),
-        max_tokens=36,
+        system=("Classify the overall sentiment as Positive, Negative, or "
+                "Neutral. State the label first, then justify it in one sentence "
+                "citing specific cues from the text."),
+        max_tokens=150,
     ),
     Category.SUMMARIZATION: PromptSpec(
-        system=("Summarise, obeying any length/format constraint in the task. "
-                "Output only the summary — no preamble, no lead-in."),
-        max_tokens=90,
+        system=("Summarise the text, strictly obeying any length or format "
+                "constraint stated in the task (e.g. 'one sentence'). Output only "
+                "the summary itself — no preamble or lead-in."),
+        max_tokens=220,
     ),
     Category.NER: PromptSpec(
-        system=('Output ONLY compact JSON (no whitespace, no prose) with keys '
-                '"person","org","location","date", each a list of strings from '
-                "the text."),
-        max_tokens=120,
+        system=("Extract named entities. If the task specifies an output format, "
+                "follow it exactly; otherwise output compact JSON with keys "
+                '"person","org","location","date", each a list of the exact '
+                "entity strings from the text (empty list if none)."),
+        max_tokens=320,
     ),
-    # Reasoning categories: just enough working for correctness, answer anchored.
     Category.MATH: PromptSpec(
-        system=("Solve with brief working, then end with 'Answer: <value>' on "
-                "its own line."),
-        # Enough room for multi-step / projection working + the answer line.
-        max_tokens=256,
+        system=("Solve step by step, then end with 'Answer: <value>' on its own "
+                "line. Give the final numeric value clearly."),
+        max_tokens=512,
     ),
     Category.LOGIC: PromptSpec(
-        system=("Solve the puzzle so every stated constraint holds. Give at most "
-                "two brief reasoning steps, then output the final answer on its "
-                "own line as 'Answer: <value>'."),
-        # Headroom so the visible working + final 'Answer:' line isn't truncated
-        # (thinking models write a short chain before the answer; a tight cap cut
-        # it off mid-reasoning and lost the answer).
-        max_tokens=420,
+        system=("Solve the puzzle so every stated constraint holds. Reason "
+                "briefly through the constraints, then output the final answer on "
+                "its own line as 'Answer: <value>'."),
+        max_tokens=512,
     ),
-    # Code: keep generous headroom — a truncated answer fails the gate.
     Category.CODE_DEBUG: PromptSpec(
-        system=("State the bug in one short line, then output the corrected code "
-                "only, in a single code block. No other explanation."),
-        max_tokens=300,
+        system=("Identify the bug, then provide the full corrected implementation "
+                "in a single code block. Keep any explanation to one short line."),
+        max_tokens=700,
     ),
     Category.CODE_GEN: PromptSpec(
-        system=("Output only the requested function(s) in one code block — "
-                "correct and complete, no explanation, no usage examples."),
-        max_tokens=300,
+        system=("Write the requested function(s), correct and complete, in a "
+                "single code block. Include only what the spec asks for."),
+        max_tokens=700,
     ),
 }
 
