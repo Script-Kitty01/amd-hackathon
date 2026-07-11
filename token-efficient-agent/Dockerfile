@@ -5,7 +5,13 @@
 # Fireworks via FIREWORKS_BASE_URL. FIREWORKS_* config is read from the
 # environment at runtime — never bundled.
 
-FROM python:3.11-slim
+# Pin the platform: the grading box is linux/amd64. Building with an explicit
+# platform guarantees the image runs there (no "exec format error" crash).
+FROM --platform=linux/amd64 python:3.11-slim
+
+# Fail fast and flush logs so any startup error is visible in the harness logs.
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
@@ -22,4 +28,6 @@ COPY config/ ./config/
 # sized generously so reasoning + the final answer both fit without truncation.
 # Non-thinking models (gemma) simply ignore reasoning and answer directly.
 
+# Runs with no arguments; reads FIREWORKS_* from the environment (injected by
+# the harness). Always writes /output/results.json and exits 0.
 ENTRYPOINT ["python", "-m", "src.main"]

@@ -14,8 +14,9 @@ from openai import OpenAI
 
 from .config import Config
 
-_MAX_RETRIES = 4
-_BASE_DELAY = 5.0  # seconds; exponential backoff for transient/rate-limit errors
+_MAX_RETRIES = 3
+_BASE_DELAY = 2.0  # seconds; exponential backoff for transient/rate-limit errors
+_MAX_DELAY = 20.0  # cap a single backoff so retries can't blow the wall-clock budget
 
 
 @dataclass
@@ -118,6 +119,6 @@ class FireworksClient:
                         exc = exc2
                 if not _is_retryable(exc) or attempt == _MAX_RETRIES - 1:
                     raise
-                delay = _BASE_DELAY * (2 ** attempt) + random.uniform(0, 1)
+                delay = min(_MAX_DELAY, _BASE_DELAY * (2 ** attempt)) + random.uniform(0, 1)
                 time.sleep(delay)
         raise last_exc  # pragma: no cover
