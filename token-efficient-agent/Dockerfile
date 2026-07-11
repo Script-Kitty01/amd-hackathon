@@ -18,4 +18,10 @@ RUN pip install --no-cache-dir -r requirements.txt \
 COPY src/ ./src/
 COPY config/ ./config/
 
+# Thinking models (e.g. minimax) burn the max_tokens budget on hidden reasoning
+# and truncate the final answer. Requesting no extra reasoning keeps answers
+# intact and cuts tokens. The client automatically drops this param for any
+# model that rejects it (costs 0 tokens), so it's safe across all ALLOWED_MODELS.
+ENV FIREWORKS_REASONING_EFFORT=none
+
 ENTRYPOINT ["python", "-m", "src.main"]

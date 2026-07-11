@@ -45,13 +45,17 @@ TEMPLATES: dict[Category, PromptSpec] = {
     Category.MATH: PromptSpec(
         system=("Solve with brief working, then end with 'Answer: <value>' on "
                 "its own line."),
-        max_tokens=160,
+        # Enough room for multi-step / projection working + the answer line.
+        max_tokens=256,
     ),
     Category.LOGIC: PromptSpec(
         system=("Solve the puzzle so every stated constraint holds. Give at most "
                 "two brief reasoning steps, then output the final answer on its "
                 "own line as 'Answer: <value>'."),
-        max_tokens=150,
+        # Headroom so the visible working + final 'Answer:' line isn't truncated
+        # (thinking models write a short chain before the answer; a tight cap cut
+        # it off mid-reasoning and lost the answer).
+        max_tokens=420,
     ),
     # Code: keep generous headroom — a truncated answer fails the gate.
     Category.CODE_DEBUG: PromptSpec(

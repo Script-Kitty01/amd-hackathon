@@ -35,13 +35,35 @@ def _is_retryable(exc: Exception) -> bool:
     return status in (429, 500, 502, 503, 504)
 
 
+def _is_reasoning_param_error(exc: Exception) -> bool:
+    """A 400 that looks like the model doesn't accept reasoning_effort/extra params."""
+    status = getattr(exc, "status_code", None)
+    if status not in (400, 422) and type(exc).__name__ != "BadRequestError":
+        return False
+    msg = str(exc).lower()
+    return (
+        "reasoning" in msg
+        or "invalid_request" in msg
+        or "unknown" in msg
+        or "unexpected" in msg
+        or "not support" in msg
+        or status in (400, 422)
+    )
+
+
 class FireworksClient:
     def __init__(self, cfg: Config) -> None:
         self._client = OpenAI(api_key=cfg.api_key, base_url=cfg.base_url)
-        # Pass provider reasoning control via extra_body when configured.
+        # Pass provider reasoning control via extra_body when configured. Thinking
+        # models (e.g. minimax) otherwise burn the max_tokens budget on hidden
+        # reasoning and truncate the answer; reasoning_effort=none fixes that.
         self._extra_body = (
             {"reasoning_effort": cfg.reasoning_effort} if cfg.reasoning_effort else None
         )
+        # Models that reject reasoning_effort with a 400 (e.g. non-thinking models).
+        # Learned at runtime so we send the param at most once to such a model,
+        # then skip it. A 400 returns no usage, so this costs 0 tokens.
+        self._no_extra_body: set[str] = set()
 
     def complete(self, model: str, system: str, user: str, max_tokens: int) -> LLMResult:
         """Single deterministic chat completion. Retries transient/rate-limit errors."""
@@ -54,25 +76,41 @@ class FireworksClient:
             total_tokens=getattr(usage, "total_tokens", 0),
         )
 
+    def _create_once(self, model: str, system: str, user: str, max_tokens: int):
+        kwargs = {}
+        if self._extra_body and model not in self._no_extra_body:
+            kwargs["extra_body"] = self._extra_body
+        return self._client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            max_tokens=max_tokens,
+            temperature=0,
+            **kwargs,
+        )
+
     def _create_with_retry(self, model: str, system: str, user: str, max_tokens: int):
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES):
             try:
-                kwargs = {}
-                if self._extra_body:
-                    kwargs["extra_body"] = self._extra_body
-                return self._client.chat.completions.create(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user},
-                    ],
-                    max_tokens=max_tokens,
-                    temperature=0,
-                    **kwargs,
-                )
+                return self._create_once(model, system, user, max_tokens)
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
+                # If the model rejects reasoning_effort, drop it and retry now
+                # (doesn't consume a retry attempt; 400 costs 0 tokens).
+                if (
+                    self._extra_body
+                    and model not in self._no_extra_body
+                    and _is_reasoning_param_error(exc)
+                ):
+                    self._no_extra_body.add(model)
+                    try:
+                        return self._create_once(model, system, user, max_tokens)
+                    except Exception as exc2:  # noqa: BLE001
+                        last_exc = exc2
+                        exc = exc2
                 if not _is_retryable(exc) or attempt == _MAX_RETRIES - 1:
                     raise
                 delay = _BASE_DELAY * (2 ** attempt) + random.uniform(0, 1)
