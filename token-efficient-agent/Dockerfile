@@ -16,10 +16,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY config/ ./config/
 
-# Thinking models (e.g. minimax) burn the max_tokens budget on hidden reasoning
-# and truncate the final answer. Requesting no extra reasoning keeps answers
-# intact and cuts tokens. The client automatically drops this param for any
-# model that rejects it (costs 0 tokens), so it's safe across all ALLOWED_MODELS.
-ENV FIREWORKS_REASONING_EFFORT=none
+# NOTE: we deliberately do NOT force reasoning_effort=none. The reasoning-heavy
+# categories (multi-step math, constraint logic, code) need the thinking models
+# (minimax/kimi) to actually reason to be correct; the prompt max_tokens are
+# sized generously so reasoning + the final answer both fit without truncation.
+# Non-thinking models (gemma) simply ignore reasoning and answer directly.
 
 ENTRYPOINT ["python", "-m", "src.main"]

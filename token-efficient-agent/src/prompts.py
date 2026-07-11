@@ -49,26 +49,29 @@ TEMPLATES: dict[Category, PromptSpec] = {
                 "entity strings from the text (empty list if none)."),
         max_tokens=320,
     ),
+    # Reasoning categories: thinking models reason before answering, so the cap
+    # must fit the full chain PLUS the answer. finalize() extracts the final
+    # 'Answer:' line for math/logic, so verbose working doesn't hurt.
     Category.MATH: PromptSpec(
         system=("Solve step by step, then end with 'Answer: <value>' on its own "
                 "line. Give the final numeric value clearly."),
-        max_tokens=512,
+        max_tokens=1024,
     ),
     Category.LOGIC: PromptSpec(
-        system=("Solve the puzzle so every stated constraint holds. Reason "
-                "briefly through the constraints, then output the final answer on "
-                "its own line as 'Answer: <value>'."),
-        max_tokens=512,
+        system=("Solve the puzzle so every stated constraint is satisfied. Work "
+                "through the constraints, then output the final answer on its own "
+                "line as 'Answer: <value>'."),
+        max_tokens=1024,
     ),
     Category.CODE_DEBUG: PromptSpec(
         system=("Identify the bug, then provide the full corrected implementation "
                 "in a single code block. Keep any explanation to one short line."),
-        max_tokens=700,
+        max_tokens=1024,
     ),
     Category.CODE_GEN: PromptSpec(
         system=("Write the requested function(s), correct and complete, in a "
                 "single code block. Include only what the spec asks for."),
-        max_tokens=700,
+        max_tokens=1024,
     ),
 }
 
