@@ -37,11 +37,22 @@ MODEL_PREFERENCE: dict[Category, int] = {}
 # hints just express which allowed model suits a category (e.g. a code-specialised
 # model for code, a reasoning model for logic/math). Used only when the sweep
 # hasn't set a calibrated preference for the category.
+# Three model groups: Gemma for language tasks, MiniMax for reasoning, Kimi for
+# code. Hints are substring-matched against ALLOWED_MODELS at runtime, so we only
+# ever return a model that IS permitted; if no hint matches, select_model falls
+# back to the first allowed model (always compliant).
 MODEL_HINTS: dict[Category, tuple[str, ...]] = {
-    Category.CODE_DEBUG: ("code", "kimi"),
-    Category.CODE_GEN: ("code", "kimi"),
-    Category.LOGIC: ("minimax", "m3", "31b"),
-    Category.MATH: ("minimax", "m3", "31b"),
+    # Code -> a code-specialised model.
+    Category.CODE_DEBUG: ("kimi", "code"),
+    Category.CODE_GEN: ("kimi", "code"),
+    # Multi-step reasoning -> a reasoning model.
+    Category.LOGIC: ("minimax", "m3"),
+    Category.MATH: ("minimax", "m3"),
+    # Language / knowledge tasks -> Gemma.
+    Category.FACTUAL: ("gemma",),
+    Category.SENTIMENT: ("gemma",),
+    Category.SUMMARIZATION: ("gemma",),
+    Category.NER: ("gemma",),
 }
 
 _PREF_ENV = "MODEL_PREFERENCE_PATH"

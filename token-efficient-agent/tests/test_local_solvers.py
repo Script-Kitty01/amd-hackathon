@@ -176,10 +176,20 @@ def test_spacy_ner_extracts_entities():
     assert any("2024" in d for d in data["date"])
 
 
-def test_ner_registry_prefers_spacy_then_heuristic():
+def test_ner_solver_disabled_for_baseline():
+    # Accuracy-first: NER is routed to Fireworks (format/nuance risk for the
+    # judge), so no local NER solver is registered.
     from src.categories import Category
-    from src.local_solvers import NERSolver, solvers_for
+    from src.local_solvers import solvers_for
 
-    ner_solvers = solvers_for(Category.NER)
-    assert isinstance(ner_solvers[0], SpacyNERSolver)
-    assert any(isinstance(s, NERSolver) for s in ner_solvers)
+    assert solvers_for(Category.NER) == []
+
+
+def test_only_math_solver_registered():
+    # The math solver is the sole local (0-token) answer path in the baseline.
+    from src.categories import Category
+    from src.local_solvers import MathSolver, solvers_for
+
+    assert solvers_for(Category.SENTIMENT) == []
+    math_solvers = solvers_for(Category.MATH)
+    assert len(math_solvers) == 1 and isinstance(math_solvers[0], MathSolver)

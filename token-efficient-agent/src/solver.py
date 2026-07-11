@@ -45,18 +45,22 @@ class Solver:
         self._client = client
 
     def _plan_attempts(self, category: Category, complexity: str, ambiguous: bool) -> list[str]:
-        """Ordered, de-duplicated list of models to try for one task."""
-        models = self._cfg.models
-        strong = escalation_model(models)
+        """Model(s) to try for one task.
 
-        if complexity == "complex" or ambiguous:
-            primary = strong  # skip a cheap call we expect to fail
-        else:
-            primary = select_model(category, models)
+        Accuracy-first: always send the task to its category-appropriate model
+        (Gemma for language, MiniMax for reasoning, Kimi for code). This is a
+        SINGLE call in the success case — we do not make a speculative cheap
+        call first. A different fallback model is appended only so a first call
+        that errors or returns empty still yields an answer (never score zero);
+        it costs extra tokens only on failure, not in the normal path.
+        """
+        models = self._cfg.models
+        primary = select_model(category, models)
 
         attempts = [primary]
-        if strong != primary:
-            attempts.append(strong)  # escalate on failure
+        fallback = escalation_model(models)
+        if fallback != primary:
+            attempts.append(fallback)
         return attempts
 
     def solve(self, task_id: str, prompt: str) -> SolveOutcome:

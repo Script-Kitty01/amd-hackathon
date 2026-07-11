@@ -69,15 +69,14 @@ def test_low_confidence_local_escalates_to_fireworks():
     assert fw.called == 1
 
 
-def test_local_llm_answers_factual_when_confident():
+def test_local_llm_distrusted_escalates_to_fireworks():
+    # Accuracy-first: even a confident local-LLM factual answer is distrusted
+    # (threshold raised to 0.85 > factual prior 0.70) and escalates to Fireworks.
     fw = FakeFireworks()
-    # factual prior 0.70 >= default local_llm threshold 0.65 -> accept locally
     c = Cascade(fireworks_solver=fw, local_llm=const_llm("Paris"))
     out = c.solve("t", "What is the capital of France?")
-    assert out.tier == "local_llm"
-    assert out.total_tokens == 0
-    assert out.answer == "Paris"
-    assert fw.called == 0
+    assert out.tier == "fireworks"
+    assert fw.called == 1
 
 
 def test_no_fireworks_returns_best_effort_local():
@@ -102,15 +101,15 @@ def test_dedup_cache_reuses_identical_prompt():
     assert fw.called == 1  # Fireworks hit only once for the duplicate
 
 
-def test_sentiment_answered_locally():
+def test_sentiment_escalates_to_fireworks():
+    # Accuracy-first baseline: the local lexicon sentiment solver is disabled,
+    # so sentiment tasks go to Fireworks for a reliable, judge-friendly label.
     fw = FakeFireworks()
     c = Cascade(fireworks_solver=fw)
-    # Realistic framing so the router classifies it as sentiment.
     out = c.solve(
         "t",
         "Classify the sentiment of this review: 'The battery dies in an hour, "
         "very disappointing.'",
     )
-    assert out.tier == "local_solver"
-    assert out.answer.startswith("Negative")
-    assert fw.called == 0
+    assert out.tier == "fireworks"
+    assert fw.called == 1

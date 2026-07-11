@@ -20,12 +20,15 @@ from dataclasses import dataclass
 
 from .categories import Category
 
-# Min confidence to accept a DETERMINISTIC local-solver answer. 
-# ACCURACY FIRST: More conservative thresholds to escalate more to strong models
+# Min confidence to accept a DETERMINISTIC local-solver answer.
+# Only the MATH solver runs locally now, and it already abstains unless the
+# pattern is a clean, unambiguous match — so trust its answers (it returns
+# 0.88-0.95). Sentiment/NER solvers are disabled (see local_solvers registry);
+# their thresholds are moot but kept for when they're re-enabled + verified.
 _DEFAULT_LOCAL_SOLVER: dict[Category, float] = {
-    Category.MATH: 0.95,       # be very sure before trusting local math
-    Category.SENTIMENT: 0.85,  # escalate more sentiment to strong models  
-    Category.NER: 0.90,        # escalate more NER to strong models
+    Category.MATH: 0.85,       # accept the deterministic math solver's outputs
+    Category.SENTIMENT: 0.85,
+    Category.NER: 0.90,
 }
 
 # Min confidence to accept a LOCAL LLM answer. 0.99 => effectively always escalate.

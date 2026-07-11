@@ -59,11 +59,13 @@ def test_easy_task_uses_cheap_primary_only():
     assert out.total_tokens == 12
 
 
-def test_complex_task_starts_on_strong_model():
-    client = FakeClient({"cheap": ("wrong", 12), "strong": ("Alice.", 40)})
-    solver = Solver(_cfg(["cheap", "strong"]), client)
+def test_logic_routes_to_reasoning_model_single_call():
+    # Accuracy-first: logic goes straight to the reasoning model (minimax),
+    # one call, no speculative cheap call first.
+    client = FakeClient({"minimax-m3": ("Alice.", 40), "kimi-k2p7-code": ("x", 99)})
+    solver = Solver(_cfg(["minimax-m3", "kimi-k2p7-code"]), client)
     out = solver.solve("t2", COMPLEX_LOGIC)
-    assert client.calls == ["strong"]
+    assert client.calls == ["minimax-m3"]
     assert out.answer == "Alice."
 
 

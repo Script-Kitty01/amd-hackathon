@@ -27,8 +27,12 @@ def test_reasoning_tasks_prefer_reasoning_model():
     assert select_model(Category.MATH, ALLOWED) == "minimax-m3"
 
 
-def test_uncategorized_defaults_to_first_allowed():
-    assert select_model(Category.FACTUAL, ALLOWED) == "minimax-m3"  # models[0]
+def test_language_tasks_prefer_gemma():
+    # factual/sentiment/summarization/NER route to the Gemma group.
+    assert select_model(Category.FACTUAL, ALLOWED) == "gemma-4-31b-it"
+    assert select_model(Category.SENTIMENT, ALLOWED) == "gemma-4-31b-it"
+    assert select_model(Category.SUMMARIZATION, ALLOWED) == "gemma-4-31b-it"
+    assert select_model(Category.NER, ALLOWED) == "gemma-4-31b-it"
 
 
 def test_calibrated_preference_overrides_hint():
