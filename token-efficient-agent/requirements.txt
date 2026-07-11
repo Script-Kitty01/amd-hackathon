@@ -1,9 +1,10 @@
 # Runtime dependencies.
-# OpenAI-compatible client for the Fireworks fallback and the local LLM endpoint.
+# OpenAI-compatible client for all Fireworks calls (the only network dependency).
 openai>=1.40.0
 
-# Local NER (statistical). The model is installed separately in the Dockerfile:
-#   python -m spacy download en_core_web_sm
-spacy>=3.8.0
+# NOTE: spaCy was removed. The spaCy/heuristic NER solvers are disabled in the
+# accuracy-first baseline (NER is routed to Fireworks), so no local NLP model is
+# needed. This keeps the image lean and the build fast. Re-add spacy + the
+# en_core_web_sm download here if the local NER solver is re-enabled.
 
 # (dev only, not shipped in the image: pytest)
