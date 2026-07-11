@@ -20,6 +20,7 @@ class EvalRecord:
     answer: str
     total_tokens: int
     passed: bool | None = None  # None when no reference is available
+    tier: str | None = None  # which cascade tier answered
 
 
 @dataclass
@@ -45,19 +46,21 @@ class EvalReport:
         return sum(1 for r in judged if r.passed) / len(judged)
 
     @property
-    def accuracy_by_category(self) -> dict[str, float | None]:
-        acc_dict: dict[str, list[bool]] = defaultdict(list)
+    def tier_counts(self) -> dict[str, int]:
+        agg: dict[str, int] = defaultdict(int)
         for r in self.records:
-            if r.passed is not None:
-                acc_dict[r.category].append(r.passed)
-        
-        result = {}
-        for cat, results in acc_dict.items():
-            if results:
-                result[cat] = sum(1 for p in results if p) / len(results)
-            else:
-                result[cat] = None
-        return result
+            if r.tier:
+                agg[r.tier] += 1
+        return dict(agg)
+
+    @property
+    def local_answer_rate(self) -> float | None:
+        """Fraction of tasks answered locally (zero Fireworks tokens)."""
+        tiered = [r for r in self.records if r.tier]
+        if not tiered:
+            return None
+        local = sum(1 for r in tiered if r.tier not in ("fireworks", "cloud"))
+        return local / len(tiered)
 
     def summary(self) -> str:
         lines = [
@@ -67,17 +70,14 @@ class EvalReport:
         acc = self.accuracy
         if acc is not None:
             lines.append(f"accuracy:     {acc:.1%}")
-            
-        lines.append("\naccuracy by category:")
-        acc_by_cat = self.accuracy_by_category
-        # Get all unique categories from records to ensure we list them all, even with 0% or None
-        all_categories = sorted(list(set(r.category for r in self.records)))
-        for cat in all_categories:
-            cat_acc = acc_by_cat.get(cat)
-            acc_str = f"{cat_acc:.1%}" if cat_acc is not None else "N/A"
-            lines.append(f"  {cat:<16} {acc_str}")
-
-        lines.append("\ntokens by category:")
+        rate = self.local_answer_rate
+        if rate is not None:
+            lines.append(f"local-answer: {rate:.1%}  (0-token tasks)")
+        if self.tier_counts:
+            lines.append("tier breakdown:")
+            for tier, n in sorted(self.tier_counts.items()):
+                lines.append(f"  {tier:<14} {n}")
+        lines.append("tokens by category:")
         for cat, tok in sorted(self.tokens_by_category.items()):
             lines.append(f"  {cat:<16} {tok}")
         return "\n".join(lines)

@@ -1,0 +1,10 @@
+{
+  "factual": 2,
+  "math": 2,
+  "sentiment": 2,
+  "summarization": 0,
+  "ner": 0,
+  "code_debug": 1,
+  "logic": 4,
+  "code_gen": 1
+}

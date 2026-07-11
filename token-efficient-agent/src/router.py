@@ -50,14 +50,28 @@ _KEYWORDS: dict[Category, tuple[str, ...]] = {
         "named entit", "extract", "entities", "person, org", "recognition",
     ),
     Category.MATH: (
-        "calculate", "percent", "%", "how many", "how much", "total",
-        "average", "sum of", "projection", "compute",
+        # Note: dropped bare "average"/"total" — too common in prose (e.g.
+        # "average O(1)"). "average of"/"mean of" (with numbers) are handled by
+        # the _MATH_SIGNAL regex below, which avoids that false positive.
+        "calculate", "percent", "%", "how many", "how much",
+        "sum of", "projection", "compute", "product of", "divided by",
     ),
     Category.FACTUAL: (
         "explain", "what is", "what are", "who ", "how does", "how do",
         "why does", "why do", "define", "definition",
     ),
 }
+
+# Explicit numeric-arithmetic signals: aggregates of a list, percent-of, and
+# two-operand word arithmetic. Requires "of"/digits so it won't fire on prose
+# like "average O(1)".
+_MATH_SIGNAL = re.compile(
+    r"\b(?:average|mean|sum|product)\s+of\s+[-\d]|"
+    r"\bwhat\s+percent(?:age)?\s+of\b|\bsquare\s+root\s+of\b|"
+    r"-?\d+(?:\.\d+)?\s+(?:plus|minus|times|multiplied by|divided by)\s+-?\d",
+    re.I,
+)
+_MATH_SIGNAL_WEIGHT = 2.0
 
 # Weight for logic matches (each regex hit is a fairly strong signal).
 _LOGIC_WEIGHT = 2.0
@@ -164,6 +178,10 @@ def _score(prompt: str) -> dict[Category, float]:
             scores[Category.CODE_DEBUG] += _CODE_WEIGHT
         else:
             scores[Category.CODE_GEN] += _CODE_WEIGHT
+
+    # Explicit numeric arithmetic (averages, sums, products, percent-of, word ops).
+    if _MATH_SIGNAL.search(prompt):
+        scores[Category.MATH] += _MATH_SIGNAL_WEIGHT
 
     # Logic / deductive puzzles.
     scores[Category.LOGIC] += _LOGIC_WEIGHT * len(_LOGIC_HINT.findall(prompt))

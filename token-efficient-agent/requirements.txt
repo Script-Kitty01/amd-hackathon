@@ -1,7 +1,9 @@
+# Runtime dependencies.
+# OpenAI-compatible client for the Fireworks fallback and the local LLM endpoint.
 openai>=1.40.0
-python-dotenv>=0.21.0
-rich>=13.0.0
-fastapi
-uvicorn
-google-generativeai>=0.3.0
 
+# Local NER (statistical). The model is installed separately in the Dockerfile:
+#   python -m spacy download en_core_web_sm
+spacy>=3.8.0
+
+# (dev only, not shipped in the image: pytest)

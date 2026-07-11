@@ -1,0 +1,52 @@
+name: Build and push agent image
+
+# Builds the Track 1 submission image (bundled llama3.2:3b + agent) on GitHub's
+# runners and pushes it to GHCR — no local Docker needed. The pushed image URL
+# is what you submit (make the package public first: repo -> Packages -> settings).
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [aamira, main]
+    paths:
+      - "token-efficient-agent/**"
+      - ".github/workflows/docker-build.yml"
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /usr/local/share/boost || true
+          df -h
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./token-efficient-agent
+          file: ./token-efficient-agent/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ghcr.io/script-kitty01/token-efficient-agent:latest
+
+      - name: Report image size
+        run: |
+          docker pull ghcr.io/script-kitty01/token-efficient-agent:latest
+          docker images ghcr.io/script-kitty01/token-efficient-agent:latest --format "uncompressed: {{.Size}}"
