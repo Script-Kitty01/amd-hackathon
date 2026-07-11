@@ -17,6 +17,7 @@ from .config import Config
 _MAX_RETRIES = 3
 _BASE_DELAY = 2.0  # seconds; exponential backoff for transient/rate-limit errors
 _MAX_DELAY = 20.0  # cap a single backoff so retries can't blow the wall-clock budget
+_REQUEST_TIMEOUT = 60.0  # hard per-call timeout; a hung call fails fast instead of blocking
 
 
 @dataclass
@@ -55,7 +56,14 @@ def _is_reasoning_param_error(exc: Exception) -> bool:
 
 class FireworksClient:
     def __init__(self, cfg: Config) -> None:
-        self._client = OpenAI(api_key=cfg.api_key, base_url=cfg.base_url)
+        # Hard per-request timeout so a stuck call can never hang the run past
+        # the 10-minute cap. We manage retries ourselves, so disable the SDK's.
+        self._client = OpenAI(
+            api_key=cfg.api_key,
+            base_url=cfg.base_url,
+            timeout=_REQUEST_TIMEOUT,
+            max_retries=0,
+        )
         # Pass provider reasoning control via extra_body when configured. Thinking
         # models (e.g. minimax) otherwise burn the max_tokens budget on hidden
         # reasoning and truncate the answer; reasoning_effort=none fixes that.
