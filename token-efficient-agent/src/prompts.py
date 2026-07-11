@@ -52,26 +52,31 @@ TEMPLATES: dict[Category, PromptSpec] = {
     # Reasoning categories: thinking models reason before answering, so the cap
     # must fit the full chain PLUS the answer. finalize() extracts the final
     # 'Answer:' line for math/logic, so verbose working doesn't hurt.
+    # Reasoning categories: thinking models emit a long chain BEFORE the answer,
+    # so the cap must fit the full chain plus the final line or the answer gets
+    # truncated (observed on hard puzzles). Generous caps; finalize() extracts the
+    # 'Answer:' line for math/logic so verbose working doesn't hurt. The prompt
+    # also asks the model to state the answer promptly to reduce runaway chains.
     Category.MATH: PromptSpec(
-        system=("Solve step by step, then end with 'Answer: <value>' on its own "
-                "line. Give the final numeric value clearly."),
-        max_tokens=1024,
+        system=("Solve step by step but concisely, then end with 'Answer: "
+                "<value>' on its own line. State the final numeric value clearly."),
+        max_tokens=1536,
     ),
     Category.LOGIC: PromptSpec(
-        system=("Solve the puzzle so every stated constraint is satisfied. Work "
-                "through the constraints, then output the final answer on its own "
-                "line as 'Answer: <value>'."),
-        max_tokens=1024,
+        system=("Solve the puzzle so every stated constraint is satisfied. Reason "
+                "concisely through the constraints and, as soon as the solution is "
+                "determined, output it on its own line as 'Answer: <value>'."),
+        max_tokens=2048,
     ),
     Category.CODE_DEBUG: PromptSpec(
         system=("Identify the bug, then provide the full corrected implementation "
                 "in a single code block. Keep any explanation to one short line."),
-        max_tokens=1024,
+        max_tokens=1280,
     ),
     Category.CODE_GEN: PromptSpec(
         system=("Write the requested function(s), correct and complete, in a "
                 "single code block. Include only what the spec asks for."),
-        max_tokens=1024,
+        max_tokens=1280,
     ),
 }
 

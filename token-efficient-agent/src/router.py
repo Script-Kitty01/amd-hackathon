@@ -29,9 +29,10 @@ _DEBUG_HINT = re.compile(r"\b(bug|fix|error|wrong|broken|debug|fails?|exception)
 # keyword list missed (e.g. "in some order", "who came first", "Carol beat Bob").
 _LOGIC_HINT = re.compile(
     r"\b(puzzle|deduce|arrange|rank(ing|ed)?|in some order|order them|"
-    r"who (came|finished|won|sits?|stands?)|beat|taller|shorter|older|younger|"
-    r"faster|slower|to the (left|right) of|if and only|given that|"
-    r"constraint|neither|exactly one|each of)\b",
+    r"who (came|finished|won|sits?|stands?|is (?:in|at|the))|beat|taller|shorter|"
+    r"older|younger|faster|slower|(?:to the\s+)?(?:left|right)\s+of|"
+    r"in the middle|in a row|next to|seated|sits?\s+(?:in|at|between)|"
+    r"if and only|given that|constraint|neither|exactly one|each of)\b",
     re.I,
 )
 
@@ -53,6 +54,10 @@ _KEYWORDS: dict[Category, tuple[str, ...]] = {
         # the _MATH_SIGNAL regex below, which avoids that false positive.
         "calculate", "percent", "%", "how many", "how much",
         "sum of", "projection", "compute", "product of", "divided by",
+        # Word-problem cues (speed/rate/distance/finance) that carry numbers but
+        # no explicit operator keyword.
+        "how fast", "how far", "how long", "speed", "per hour", "km/h", "mph",
+        "interest", "rate of", "what is its", "on average",
     ),
     Category.FACTUAL: (
         "explain", "what is", "what are", "who ", "how does", "how do",
