@@ -26,6 +26,10 @@ class Config:
     api_key: str
     base_url: str
     models: list[str]
+    # Optional: disable/limit provider "thinking" tokens (e.g. "none" for Gemini
+    # 2.5). Thinking models otherwise burn the max_tokens budget on hidden
+    # reasoning, truncating answers and inflating token cost.
+    reasoning_effort: str | None = None
 
     @property
     def default_model(self) -> str:
@@ -34,10 +38,11 @@ class Config:
 
 def load_config() -> Config:
     """Read required env vars. Raises KeyError if any are missing."""
-    cfg = Config(
-        api_key=os.environ["GOOGLE_API_KEY"],
-        base_url=os.environ.get("GOOGLE_BASE_URL", ""),
-        models=[m.strip() for m in os.environ["GOOGLE_MODELS"].split(",") if m.strip()],
+    return Config(
+        api_key=os.environ["FIREWORKS_API_KEY"],
+        base_url=os.environ["FIREWORKS_BASE_URL"],
+        models=[m.strip() for m in os.environ["ALLOWED_MODELS"].split(",") if m.strip()],
+        reasoning_effort=os.environ.get("FIREWORKS_REASONING_EFFORT") or None,
     )
     print(f"Loaded Config: API Key (first 5 chars): {cfg.api_key[:5]}, Base URL: {cfg.base_url}, Models: {cfg.models}, Default Model: {cfg.default_model}")
     return cfg

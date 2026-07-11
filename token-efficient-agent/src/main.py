@@ -11,10 +11,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from . import config
+from .cascade import Cascade
+from .categories import load_model_preference
 from .config import load_config
 from .google_client import GoogleClient
 from .io_utils import read_tasks, write_results
+from .local_llm import LocalLLM
 from .solver import Solver
+from .thresholds import load_thresholds
 
 MAX_WORKERS = 2
 
@@ -22,24 +26,30 @@ MAX_WORKERS = 2
 def run() -> int:
     start = time.monotonic()
     cfg = load_config()
+    load_model_preference()  # overlay launch-day sweep output if present
     tasks = read_tasks(config.INPUT_PATH)
 
-    client = GoogleClient(cfg)
-    solver = Solver(cfg, client)
+    # Build the local-first cascade: local solvers -> local LLM -> Fireworks.
+    fireworks_solver = Solver(cfg, FireworksClient(cfg))
+    cascade = Cascade(
+        thresholds=load_thresholds(),
+        fireworks_solver=fireworks_solver,
+        local_llm=LocalLLM.from_env(),  # None if no local model configured
+    )
 
     # Preserve input order; default every task to a safe fallback answer.
     answers: dict[str, str] = {t.task_id: "Unable to produce an answer." for t in tasks}
 
-    # Process sequentially instead of concurrently to respect strict free-tier rate limits
-    for t in tasks:
-        if time.monotonic() - start > config.RUNTIME_BUDGET_SECONDS:
-            print("Wall-clock budget exceeded. Stopping early.", file=sys.stderr)
-            break
-        try:
-            outcome = solver.solve(t.task_id, t.prompt)
-            answers[outcome.task_id] = outcome.answer
-        except Exception as exc:
-             print(f"Task {t.task_id} failed completely: {exc}", file=sys.stderr)
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = {pool.submit(cascade.solve, t.task_id, t.prompt): t.task_id for t in tasks}
+        for fut in as_completed(futures):
+            if time.monotonic() - start > config.RUNTIME_BUDGET_SECONDS:
+                break
+            try:
+                outcome = fut.result()
+                answers[outcome.task_id] = outcome.answer
+            except Exception:
+                pass  # keep the fallback answer
 
     results = [{"task_id": t.task_id, "answer": answers[t.task_id]} for t in tasks]
     write_results(config.OUTPUT_PATH, results)

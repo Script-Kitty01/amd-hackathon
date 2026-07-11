@@ -1,0 +1,38 @@
+[
+  {
+    "task_id": "factual",
+    "prompt": "What is the capital of France?",
+    "expected": "Paris"
+  },
+  { "task_id": "math", "prompt": "What is 15% of 200?", "expected": "30" },
+  {
+    "task_id": "sentiment",
+    "prompt": "Classify the sentiment of this review: 'I absolutely love this, it works great!'",
+    "expected": "Positive"
+  },
+  {
+    "task_id": "summarization",
+    "prompt": "Summarise the following text in one sentence: The library extended its opening hours during exam season, adding weekend access and 24-hour study rooms to help students.",
+    "expected": ""
+  },
+  {
+    "task_id": "ner",
+    "prompt": "Extract named entities from: 'Satya Nadella, CEO of Microsoft, visited Paris on March 3, 2024.'",
+    "expected": "Microsoft"
+  },
+  {
+    "task_id": "code_debug",
+    "prompt": "Find and fix the bug:\n```python\ndef add(a, b):\n    return a - b\n```",
+    "expected": "a + b"
+  },
+  {
+    "task_id": "logic",
+    "prompt": "Alice, Bob, and Carol finished 1st, 2nd, 3rd in some order. Alice was not last. Carol beat Bob. Who came first?",
+    "expected": "Alice"
+  },
+  {
+    "task_id": "code_gen",
+    "prompt": "Write a Python function that returns the nth Fibonacci number iteratively.",
+    "expected": "def"
+  }
+]

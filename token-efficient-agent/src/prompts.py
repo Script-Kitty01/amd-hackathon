@@ -19,43 +19,50 @@ class PromptSpec:
 
 
 TEMPLATES: dict[Category, PromptSpec] = {
+    # Non-reasoning categories: push for the shortest correct output.
     Category.FACTUAL: PromptSpec(
-        system="Provide a direct, factual answer in 1-2 sentences. No intro, no filler.",
-        max_tokens=150, # Bumped up
-    ),
-    Category.MATH: PromptSpec(
-        system=("Solve the problem step-by-step. At the very end, output ONLY the final numerical answer on a new line, prefixed exactly by 'Answer: '."),
-        max_tokens=300,
+        system=("Answer in at most 3 short sentences. No preamble, no filler, "
+                "do not restate the question."),
+        max_tokens=130,
     ),
     Category.SENTIMENT: PromptSpec(
-        system=("Classify the sentiment as Positive, Negative, or Neutral. "
-                "Reply with the exact label, a colon, and a brief (max 8 words) reason. Example: 'Positive: great acting.'"),
-        max_tokens=100,
+        system=("Classify the sentiment as Positive, Negative, or Neutral. Output "
+                "the label, then a reason of at most 6 words."),
+        max_tokens=36,
     ),
     Category.SUMMARIZATION: PromptSpec(
-        system=("Summarise the text obeying any length/format constraint stated "
-                "in the task. Output only the summary. Do not add introductory phrases like 'Here is the summary:'."),
-        max_tokens=200,
+        system=("Summarise, obeying any length/format constraint in the task. "
+                "Output only the summary — no preamble, no lead-in."),
+        max_tokens=90,
     ),
     Category.NER: PromptSpec(
-        system=('Extract named entities. Output a raw JSON object with keys '
-                '"person", "org", "location", "date"; where each value is a list of strings. DO NOT use markdown code blocks (```json).'),
-        max_tokens=250,
+        system=('Output ONLY compact JSON (no whitespace, no prose) with keys '
+                '"person","org","location","date", each a list of strings from '
+                "the text."),
+        max_tokens=120,
     ),
-    Category.CODE_DEBUG: PromptSpec(
-        system=("Identify the bug in one short line, then output the corrected "
-                "code only, in a single code block. No extra explanation."),
-        max_tokens=400, # Bumped up
+    # Reasoning categories: just enough working for correctness, answer anchored.
+    Category.MATH: PromptSpec(
+        system=("Solve with brief working, then end with 'Answer: <value>' on "
+                "its own line."),
+        max_tokens=160,
     ),
     Category.LOGIC: PromptSpec(
-        system=("Reason step by step but concisely, satisfying every stated "
-                "constraint. End with the final answer on its own line."),
-        max_tokens=400, # Bumped up
+        system=("Solve the puzzle so every stated constraint holds. Give at most "
+                "two brief reasoning steps, then output the final answer on its "
+                "own line as 'Answer: <value>'."),
+        max_tokens=150,
+    ),
+    # Code: keep generous headroom — a truncated answer fails the gate.
+    Category.CODE_DEBUG: PromptSpec(
+        system=("State the bug in one short line, then output the corrected code "
+                "only, in a single code block. No other explanation."),
+        max_tokens=300,
     ),
     Category.CODE_GEN: PromptSpec(
-        system=("Write only the requested function(s), correct and complete, in "
-                "a single code block. No explanation, no usage examples."),
-        max_tokens=400, # Bumped up
+        system=("Output only the requested function(s) in one code block — "
+                "correct and complete, no explanation, no usage examples."),
+        max_tokens=300,
     ),
 }
 

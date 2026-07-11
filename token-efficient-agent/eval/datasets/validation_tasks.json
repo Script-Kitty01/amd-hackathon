@@ -1,0 +1,125 @@
+[
+  {
+    "task_id": "factual_1",
+    "prompt": "What is photosynthesis and why is it important?",
+    "expected": "plants convert light to energy"
+  },
+  {
+    "task_id": "factual_2",
+    "prompt": "How does a vaccine help the immune system?",
+    "expected": "trains immune system"
+  },
+  {
+    "task_id": "factual_3",
+    "prompt": "What is the main difference between RAM and a hard drive?",
+    "expected": "RAM is volatile temporary memory, disk is persistent storage"
+  },
+
+  {
+    "task_id": "math_1",
+    "prompt": "A car uses 8 litres of fuel per 100 km. How many litres are needed for a 250 km trip?",
+    "expected": "20"
+  },
+  { "task_id": "math_2", "prompt": "What is 40% of 150?", "expected": "60" },
+  {
+    "task_id": "math_3",
+    "prompt": "A book cost $25 and is now 20% off. What is the new price?",
+    "expected": "20"
+  },
+
+  {
+    "task_id": "sentiment_1",
+    "prompt": "Classify the sentiment of this review: 'The hotel room was clean and spacious, although check-in took forever.'",
+    "expected": "mixed or positive"
+  },
+  {
+    "task_id": "sentiment_2",
+    "prompt": "What is the sentiment of this comment: 'Absolutely awful, I want a refund immediately.'",
+    "expected": "Negative"
+  },
+  {
+    "task_id": "sentiment_3",
+    "prompt": "Determine the sentiment: 'The phone is decent, but the camera is disappointing and the battery drains fast.'",
+    "expected": "Negative or mixed"
+  },
+
+  {
+    "task_id": "summarization_1",
+    "prompt": "Summarise in one sentence: The startup raised $50 million in a funding round led by two venture firms, planning to use the money to expand into European markets and double its engineering team within a year.",
+    "expected": ""
+  },
+  {
+    "task_id": "summarization_2",
+    "prompt": "Give a one-sentence summary: Heavy rainfall over the weekend caused flooding across several low-lying neighbourhoods, prompting evacuations, road closures, and an emergency response from local authorities.",
+    "expected": ""
+  },
+  {
+    "task_id": "summarization_3",
+    "prompt": "Condense to one sentence: The new smartphone features a faster processor, an improved camera system, and a larger battery, but keeps the same price as last year's model.",
+    "expected": ""
+  },
+
+  {
+    "task_id": "ner_1",
+    "prompt": "Extract the named entities from: 'Jeff Bezos stepped down as Amazon CEO in Seattle in July 2021.'",
+    "expected": "Amazon"
+  },
+  {
+    "task_id": "ner_2",
+    "prompt": "List the named entities in: 'The World Health Organization declared a pandemic on 11 March 2020.'",
+    "expected": "World Health Organization"
+  },
+  {
+    "task_id": "ner_3",
+    "prompt": "Identify people, organisations, locations and dates in: 'Leonardo da Vinci painted the Mona Lisa in Florence around 1503.'",
+    "expected": "Florence"
+  },
+
+  {
+    "task_id": "code_debug_1",
+    "prompt": "Find and fix the bug:\n```python\ndef sum_list(lst):\n    total = 0\n    for x in lst:\n        total = x\n    return total\n```",
+    "expected": "total += x"
+  },
+  {
+    "task_id": "code_debug_2",
+    "prompt": "Find and fix the bug:\n```python\ndef get_first(lst):\n    return lst[1]\n```",
+    "expected": "lst[0]"
+  },
+  {
+    "task_id": "code_debug_3",
+    "prompt": "Find and fix the bug in this function meant to double a number:\n```python\ndef double(x):\n    return x + x + x\n```",
+    "expected": "x + x"
+  },
+
+  {
+    "task_id": "logic_1",
+    "prompt": "If today is Wednesday, what day of the week will it be 3 days from now?",
+    "expected": "Saturday"
+  },
+  {
+    "task_id": "logic_2",
+    "prompt": "Sara is older than Tom. Tom is older than Mike. Is Sara older than Mike? Answer yes or no.",
+    "expected": "Yes"
+  },
+  {
+    "task_id": "logic_3",
+    "prompt": "In a running race, if you overtake the person currently in second place, what position are you in?",
+    "expected": "second"
+  },
+
+  {
+    "task_id": "code_gen_1",
+    "prompt": "Write a Python function that returns the larger of two numbers.",
+    "expected": "def"
+  },
+  {
+    "task_id": "code_gen_2",
+    "prompt": "Write a Python function that reverses a list without using the built-in reverse.",
+    "expected": "def"
+  },
+  {
+    "task_id": "code_gen_3",
+    "prompt": "Write a Python function that returns True if a number is prime.",
+    "expected": "def"
+  }
+]

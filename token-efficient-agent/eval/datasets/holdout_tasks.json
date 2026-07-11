@@ -1,0 +1,129 @@
+[
+  {
+    "task_id": "factual_1",
+    "prompt": "What causes the seasons on Earth?",
+    "expected": "axial tilt"
+  },
+  {
+    "task_id": "factual_2",
+    "prompt": "In software, define what an API is and what it is used for.",
+    "expected": "interface for programs to communicate"
+  },
+  {
+    "task_id": "factual_3",
+    "prompt": "Why does ice float on liquid water?",
+    "expected": "ice is less dense than water"
+  },
+
+  {
+    "task_id": "math_1",
+    "prompt": "A train travels 240 km in 3 hours. What is its average speed in km/h?",
+    "expected": "80"
+  },
+  {
+    "task_id": "math_2",
+    "prompt": "A jacket originally costs $80 and is on sale for 30% off. What is the sale price?",
+    "expected": "56"
+  },
+  {
+    "task_id": "math_3",
+    "prompt": "A shop sells 3 pens for $6. At that rate, how much do 10 pens cost?",
+    "expected": "20"
+  },
+
+  {
+    "task_id": "sentiment_1",
+    "prompt": "Classify the sentiment of this review: 'The service was slow, but the food was absolutely delicious.'",
+    "expected": "mixed or positive"
+  },
+  {
+    "task_id": "sentiment_2",
+    "prompt": "What is the sentiment of this statement: 'I regret buying this, it was a total waste of money.'",
+    "expected": "Negative"
+  },
+  {
+    "task_id": "sentiment_3",
+    "prompt": "Determine the sentiment: 'Fantastic experience, I will definitely come back!'",
+    "expected": "Positive"
+  },
+
+  {
+    "task_id": "summarization_1",
+    "prompt": "Summarise the following in one sentence: Solar and wind power have become cheaper than fossil fuels in many regions, prompting utilities to retire coal plants earlier than planned and invest heavily in battery storage to handle intermittent supply.",
+    "expected": ""
+  },
+  {
+    "task_id": "summarization_2",
+    "prompt": "Give a one-sentence summary: The museum unveiled a new wing dedicated to digital art, featuring interactive installations, a virtual-reality theatre, and rotating exhibits from emerging artists around the world.",
+    "expected": ""
+  },
+  {
+    "task_id": "summarization_3",
+    "prompt": "Condense to a single sentence: After months of negotiation, the two companies agreed to merge, combining their research divisions and promising no layoffs for at least two years while they integrate operations.",
+    "expected": ""
+  },
+
+  {
+    "task_id": "ner_1",
+    "prompt": "Extract the named entities from: 'Elon Musk founded SpaceX in Hawthorne, California in 2002.'",
+    "expected": "SpaceX"
+  },
+  {
+    "task_id": "ner_2",
+    "prompt": "List the named entities in: 'The United Nations held its first meeting in London on 10 January 1946.'",
+    "expected": "United Nations"
+  },
+  {
+    "task_id": "ner_3",
+    "prompt": "Identify people, organizations, locations, and dates in: 'Marie Curie received her Nobel Prize in Stockholm in December 1903.'",
+    "expected": "Marie Curie"
+  },
+
+  {
+    "task_id": "code_debug_1",
+    "prompt": "Find and fix the bug:\n```python\ndef factorial(n):\n    result = 1\n    for i in range(n):\n        result *= i\n    return result\n```",
+    "expected": "range(1, n + 1)"
+  },
+  {
+    "task_id": "code_debug_2",
+    "prompt": "Find and fix the bug:\n```python\ndef is_even(n):\n    return n % 2 == 1\n```",
+    "expected": "n % 2 == 0"
+  },
+  {
+    "task_id": "code_debug_3",
+    "prompt": "Find and fix the bug in this average function:\n```python\ndef average(nums):\n    return sum(nums) / len(nums) - 1\n```",
+    "expected": "sum(nums) / len(nums)"
+  },
+
+  {
+    "task_id": "logic_1",
+    "prompt": "Three boxes are labeled A, B, and C. Exactly one contains a prize. Sign on A: 'The prize is in A.' Sign on B: 'The prize is not in B.' Sign on C: 'The prize is not in A.' Exactly one of the three signs is true. Which box has the prize?",
+    "expected": "B"
+  },
+  {
+    "task_id": "logic_2",
+    "prompt": "Tom is taller than Jerry. Jerry is taller than Spike. Spike is taller than Butch. Who is the shortest?",
+    "expected": "Butch"
+  },
+  {
+    "task_id": "logic_3",
+    "prompt": "All Bloops are Razzies. All Razzies are Lazzies. Are all Bloops necessarily Lazzies? Answer yes or no.",
+    "expected": "Yes"
+  },
+
+  {
+    "task_id": "code_gen_1",
+    "prompt": "Write a Python function that returns True if a given string is a palindrome and False otherwise.",
+    "expected": "def"
+  },
+  {
+    "task_id": "code_gen_2",
+    "prompt": "Write a Python function that returns the number of vowels in a given string.",
+    "expected": "def"
+  },
+  {
+    "task_id": "code_gen_3",
+    "prompt": "Write a Python function that takes a list of integers and returns a new list with only the even numbers.",
+    "expected": "def"
+  }
+]
