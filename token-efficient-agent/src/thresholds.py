@@ -20,27 +20,29 @@ from dataclasses import dataclass
 
 from .categories import Category
 
-# Min confidence to accept a DETERMINISTIC local-solver answer.
+# Min confidence to accept a DETERMINISTIC local-solver answer. 
+# ACCURACY FIRST: More conservative thresholds to escalate more to strong models
 _DEFAULT_LOCAL_SOLVER: dict[Category, float] = {
-    Category.MATH: 0.85,       # deterministic parse -> trust it
-    Category.SENTIMENT: 0.70,  # lexicon with clear margin
-    Category.NER: 0.80,        # spaCy statistical NER (0.85) accepted; heuristic escalates
+    Category.MATH: 0.95,       # be very sure before trusting local math
+    Category.SENTIMENT: 0.85,  # escalate more sentiment to strong models  
+    Category.NER: 0.90,        # escalate more NER to strong models
 }
 
 # Min confidence to accept a LOCAL LLM answer. 0.99 => effectively always escalate.
+# ACCURACY FIRST: Very high thresholds to force escalation to Fireworks models
 _DEFAULT_LOCAL_LLM: dict[Category, float] = {
-    Category.FACTUAL: 0.65,
-    Category.SUMMARIZATION: 0.65,
-    Category.SENTIMENT: 0.65,
-    Category.NER: 0.60,
-    Category.CODE_GEN: 0.70,
-    Category.CODE_DEBUG: 0.90,
-    Category.MATH: 0.99,   # don't trust LLM arithmetic -> escalate
-    Category.LOGIC: 0.99,  # conservative on deductive reasoning -> escalate
+    Category.FACTUAL: 0.85,     # escalate most factual questions
+    Category.SUMMARIZATION: 0.80,  # escalate most summarization
+    Category.SENTIMENT: 0.85,   # escalate most sentiment
+    Category.NER: 0.85,         # escalate most NER
+    Category.CODE_GEN: 0.95,    # escalate almost all code generation
+    Category.CODE_DEBUG: 0.99,  # escalate all debugging
+    Category.MATH: 0.99,        # escalate all math
+    Category.LOGIC: 0.99,       # escalate all logic
 }
 
-_FALLBACK_SOLVER = 0.80
-_FALLBACK_LLM = 0.70
+_FALLBACK_SOLVER = 0.90  # More conservative fallback
+_FALLBACK_LLM = 0.85     # More conservative fallback
 
 _THRESH_ENV = "CONFIDENCE_PATH"
 _DEFAULT_THRESH_PATH = "config/confidence.json"
