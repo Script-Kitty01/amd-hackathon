@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import random
+import re
 import time
 from typing import Optional
 
@@ -19,6 +20,11 @@ from src.fireworks_client import _is_retryable
 
 _MAX_RETRIES = 4
 _BASE_DELAY = 5.0
+# Generous budget: thinking judge models (e.g. Gemini flash) spend hidden
+# reasoning tokens; a tiny cap leaves empty content and every verdict reads FAIL.
+# Judge tokens are not part of the agent's score, so this is free.
+_JUDGE_MAX_TOKENS = 2048
+_VERDICT = re.compile(r"\b(PASS|FAIL)\b", re.I)
 
 _JUDGE_SYS = (
     "You grade an AI assistant's answer to a task. Judge only whether the answer "
@@ -71,7 +77,8 @@ class Judge:
         for attempt in range(_MAX_RETRIES):
             try:
                 resp = self._client.chat.completions.create(
-                    model=self._model, messages=messages, temperature=0, max_tokens=5
+                    model=self._model, messages=messages, temperature=0,
+                    max_tokens=_JUDGE_MAX_TOKENS,
                 )
                 break
             except Exception as exc:  # noqa: BLE001
@@ -82,5 +89,7 @@ class Judge:
             return False
         usage = resp.usage
         self.total_tokens += getattr(usage, "total_tokens", 0) or 0
-        verdict = (resp.choices[0].message.content or "").strip().upper()
-        return verdict.startswith("PASS")
+        content = resp.choices[0].message.content or ""
+        # Robust to thinking models / extra prose: take the LAST PASS|FAIL token.
+        found = _VERDICT.findall(content)
+        return bool(found) and found[-1].upper() == "PASS"
