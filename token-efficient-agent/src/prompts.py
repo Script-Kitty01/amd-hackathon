@@ -51,6 +51,7 @@ TEMPLATES: dict[Category, PromptSpec] = {
     Category.NER: PromptSpec(
         system='Extract all entities. JSON only: {"person":[],"organization":[],"location":[],"date":[]}.',
         max_tokens=192,
+        stop=["\n\n"],  # cut any trailing prose after the compact JSON
         needs_reasoning=False,
     ),
     # Reasoning categories: compact equations/logic, not prose.
