@@ -219,3 +219,76 @@ def test_ratio_solver_recipe():
     assert s is not None
     assert "1.875" in s.answer
     assert "4.50" in s.answer
+
+
+# --- exact response solver ---
+
+from src.local_solvers import try_exact_response
+
+
+def test_exact_response_double_quotes():
+    s = try_exact_response('Reply with exactly "ACK" to confirm.')
+    assert s is not None and s.answer == "ACK"
+
+
+def test_exact_response_colon():
+    s = try_exact_response("Respond with exactly: DONE")
+    assert s is not None and s.answer == "DONE"
+
+
+def test_exact_response_abstains_on_alternatives():
+    # "exactly yes or no" -> choice depends on the question, must abstain
+    assert try_exact_response("Answer with exactly 'yes' or 'no': is 5 prime?") is None
+
+
+def test_exact_response_none_when_absent():
+    assert try_exact_response("What is the capital of France?") is None
+
+
+# --- speed / distance / time ---
+
+from src.local_solvers import SpeedDistanceSolver
+
+
+def test_speed_distance_single_leg():
+    s = SpeedDistanceSolver().try_solve(
+        "A car travels at 60 km/h for 3 hours. What distance does it cover?"
+    )
+    assert s is not None and s.answer == "180"
+
+
+def test_speed_distance_abstains_multi_leg():
+    s = SpeedDistanceSolver().try_solve(
+        "A car travels at 60 km/h for 2 hours then at 80 km/h for 1 hour. Total distance?"
+    )
+    assert s is None
+
+
+# --- simple interest ---
+
+from src.local_solvers import SimpleInterestSolver
+
+
+def test_simple_interest():
+    s = SimpleInterestSolver().try_solve(
+        "Calculate the simple interest on a principal of 1000 at 5% per annum for 3 years."
+    )
+    assert s is not None and s.answer == "150"
+
+
+def test_simple_interest_abstains_on_compound():
+    s = SimpleInterestSolver().try_solve(
+        "Calculate the compound interest on 1000 at 5% for 3 years."
+    )
+    assert s is None
+
+
+# --- unit cost ---
+
+from src.local_solvers import UnitCostSolver
+
+
+def test_unit_cost():
+    s = UnitCostSolver().try_solve("12 items cost $60. What is the price per item?")
+    assert s is not None
+    assert "5" in s.answer

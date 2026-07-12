@@ -340,6 +340,163 @@ def _parse_fraction(s: str) -> float:
     return float(s)
 
 
+# --- Family 4: speed / distance / time (single clean relation) -------------
+# distance = speed * time. Conservative: exactly one speed and one time, and
+# every number in the prompt must be consumed (no multi-leg problems).
+
+_SPEED_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:km/h|kph|mph|m/s|km per hour|miles per hour|meters per second)",
+    re.I,
+)
+_TIME_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|minutes?|mins?|seconds?|secs?)",
+    re.I,
+)
+
+
+class SpeedDistanceSolver:
+    """distance = speed x time, only when exactly one speed and one time appear."""
+
+    category = Category.MATH
+
+    def try_solve(self, prompt: str) -> Optional[Solution]:
+        p = prompt.strip()
+        low = p.lower()
+        # Must be asking for distance (not time/speed, which need different forms)
+        if "distance" not in low and "how far" not in low:
+            return None
+        # Multi-leg problems (then, and then) are beyond this solver
+        if any(w in low for w in ("then", "after that", "followed by")):
+            return None
+
+        speeds = _SPEED_RE.findall(p)
+        times = _TIME_RE.findall(p)
+        if len(speeds) != 1 or len(times) != 1:
+            return None
+
+        try:
+            speed = float(speeds[0])
+            time = float(times[0])
+        except ValueError:
+            return None
+
+        distance = speed * time
+        consumed = {speed, time}
+        if not _all_numbers_consumed(p, consumed):
+            return None
+        return Solution(_fmt(distance, False), confidence=0.9)
+
+
+# --- Family 5: simple interest ---------------------------------------------
+# I = P * R * T / 100. Only when the prompt explicitly says "simple interest".
+
+_PRINCIPAL_RE = re.compile(r"(?:principal|invests?|deposits?|borrows?|of)\s+\$?\s*(\d[\d,]*(?:\.\d+)?)", re.I)
+_RATE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%(?:\s*(?:per\s+(?:annum|year)|annual))?", re.I)
+_YEARS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*years?", re.I)
+
+
+class SimpleInterestSolver:
+    """simple interest I = P*R*T/100, only when 'simple interest' is stated."""
+
+    category = Category.MATH
+
+    def try_solve(self, prompt: str) -> Optional[Solution]:
+        p = prompt.strip()
+        low = p.lower()
+        if "simple interest" not in low:
+            return None
+        # Compound interest is a different formula — abstain
+        if "compound" in low:
+            return None
+
+        principals = _PRINCIPAL_RE.findall(p)
+        rates = _RATE_RE.findall(p)
+        years = _YEARS_RE.findall(p)
+        if not principals or len(rates) != 1 or len(years) != 1:
+            return None
+
+        try:
+            principal = _num(principals[0])
+            rate = float(rates[0])
+            time = float(years[0])
+        except ValueError:
+            return None
+
+        interest = principal * rate * time / 100.0
+        consumed = {principal, rate, time}
+        if not _all_numbers_consumed(p, consumed):
+            return None
+        currency = "$" in p
+        return Solution(_fmt(round(interest, 2), currency), confidence=0.9)
+
+
+# --- Family 6: unit cost ----------------------------------------------------
+# "N items cost $X, price per item?" → X/N
+
+_TOTAL_FOR_N = re.compile(
+    r"(\d[\d,]*(?:\.\d+)?)\s*(?:items?|units?|pieces?|kg|pounds?|lbs?)\s+cost\s+\$?\s*(\d[\d,]*(?:\.\d+)?)",
+    re.I,
+)
+
+
+class UnitCostSolver:
+    """price per unit = total / count, when 'per item/unit' cost is asked."""
+
+    category = Category.MATH
+
+    def try_solve(self, prompt: str) -> Optional[Solution]:
+        p = prompt.strip()
+        low = p.lower()
+        if not any(w in low for w in ("per item", "per unit", "each", "cost of one", "price per")):
+            return None
+
+        m = _TOTAL_FOR_N.search(p)
+        if not m:
+            return None
+        try:
+            count = _num(m.group(1))
+            total = _num(m.group(2))
+        except ValueError:
+            return None
+        if count == 0:
+            return None
+
+        per_unit = total / count
+        consumed = {count, total}
+        if not _all_numbers_consumed(p, consumed):
+            return None
+        return Solution(_fmt(round(per_unit, 2), "$" in p), confidence=0.9)
+
+
+# --- Exact-response solver (any category) ----------------------------------
+# "Reply with exactly 'ACK'" → ACK. No LLM. Only fires when unambiguous.
+
+_EXACT_RE = re.compile(
+    r"(?:reply|respond|answer|output)\s+with\s+exactly\s*"
+    r"(?::\s*([^\n.]+)|['\"]([^'\"]+)['\"])",
+    re.I,
+)
+
+
+def try_exact_response(prompt: str) -> Optional[Solution]:
+    """Return the literal required response if the instruction is unambiguous.
+
+    Abstains when alternatives are offered ("exactly 'yes' or 'no'") since the
+    correct choice then depends on the actual question.
+    """
+    m = _EXACT_RE.search(prompt)
+    if not m:
+        return None
+    # If an alternative follows ("...exactly X, or Y"), the choice is content-dependent
+    tail = prompt[m.end():]
+    if re.match(r"\s*(?:,|or\b|and\b)", tail, re.I):
+        return None
+    literal = (m.group(1) or m.group(2) or "").strip()
+    if not literal or re.search(r"\bor\b", literal, re.I):
+        return None
+    return Solution(literal, confidence=0.99)
+
+
 class RatioSolver:
     """Solves proportion + optional cost problems.
 
@@ -629,9 +786,17 @@ class SpacyNERSolver:
 # A wrong local answer costs the same tokens as a correct one (zero) but
 # risks the accuracy gate — the one thing we cannot recover from.
 _SOLVERS: dict[Category, list[LocalSolver]] = {
-    # Math: deterministic single-step + multi-step operation chains + ratio/cost.
-    # All three abstain when any number in the prompt is unconsumed.
-    Category.MATH: [MathSolver(), OperationChainSolver(), RatioSolver()],
+    # Math: deterministic single-step + multi-step chains + ratio/cost +
+    # speed/distance/time + simple interest + unit cost. All abstain when any
+    # number in the prompt is unconsumed (protects the accuracy gate).
+    Category.MATH: [
+        MathSolver(),
+        OperationChainSolver(),
+        RatioSolver(),
+        SpeedDistanceSolver(),
+        SimpleInterestSolver(),
+        UnitCostSolver(),
+    ],
     # Sentiment: clear one-sided signals only. Abstains on any contrastive text
     # ("but", "however", "although") and on mixed pos/neg signals.
     # The judge's mixed-review tasks always have contrastive language → Fireworks.

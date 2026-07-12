@@ -20,7 +20,7 @@ from typing import Optional
 from .categories import Category
 from .finalize import finalize
 from .local_llm import LocalLLM
-from .local_solvers import Solution, solvers_for
+from .local_solvers import Solution, solvers_for, try_exact_response
 from .router import route
 from .thresholds import Thresholds, load_thresholds
 
@@ -78,6 +78,12 @@ class Cascade:
         r = route(prompt)
         cat = r.category
         best: Optional[Solution] = None  # highest-confidence local answer seen
+
+        # Tier 0: exact-response instruction ("reply with exactly X") — any
+        # category, zero tokens, only fires when unambiguous.
+        exact = try_exact_response(prompt)
+        if exact is not None:
+            return CascadeOutcome(task_id, exact.answer, cat, 0, "local_solver")
 
         # Tier 1: deterministic local solvers.
         for solver in solvers_for(cat):
