@@ -1,0 +1,52 @@
+[
+  {
+    "task_id": "T01",
+    "prompt": "Name the three primary colors in the RGB color model and briefly explain why displays use RGB instead of RYB.",
+    "expected": "Correctly identifies red, green, and blue as the three primary colors, and explains that RGB is used in displays because screens emit light additively (additive color mixing), whereas RYB applies to subtractive mixing of physical pigments."
+  },
+  {
+    "task_id": "T01b",
+    "prompt": "What is the difference between machine learning and deep learning? Briefly explain how each works.",
+    "expected": "Distinguishes ML as algorithms that learn patterns from data, and deep learning as a subset of ML using multi-layer neural networks. Explains that deep learning automatically extracts features from raw data, while traditional ML often requires manual feature engineering. Must make the subset relationship clear."
+  },
+  {
+    "task_id": "T01c",
+    "prompt": "Explain the difference between RAM and ROM in a computer. What is each type used for?",
+    "expected": "RAM is volatile and fast, used for temporary storage of active programs and data. ROM is non-volatile and stores permanent firmware or BIOS. Must correctly distinguish volatility, speed, and use case for both types."
+  },
+  {
+    "task_id": "T02",
+    "prompt": "A warehouse starts with 2,400 units. In Q1 it sells 37% of stock. In Q2 it restocks 800 units. In Q3 it sells 640 units. How many units remain at the end of Q3?",
+    "expected": "Correctly arrives at 1,672 units remaining: 2400 - 888 (37% of 2400) = 1512, + 800 = 2312, - 640 = 1672."
+  },
+  {
+    "task_id": "T02b",
+    "prompt": "A recipe requires 3/4 cup of sugar for 12 cookies. How much sugar is needed for 30 cookies? If sugar costs $2.40 per cup, what is the total cost of sugar for 30 cookies?",
+    "expected": "30 cookies need (3/4 x 30/12) = 1.875 cups of sugar. Total cost = 1.875 x $2.40 = $4.50. BOTH answers must be present and correct (minor rounding of cups acceptable if cost rounds to $4.50)."
+  },
+  {
+    "task_id": "T03",
+    "prompt": "Classify the sentiment of this customer review as Positive, Negative, or Neutral and give a one-sentence reason: 'The product arrived two days late and the packaging was damaged, but the item worked perfectly and customer support resolved my complaint within an hour.'",
+    "expected": "Label must be Mixed, Neutral, or Positive (NOT Negative). The one-sentence reason MUST acknowledge both the negative experience (late delivery, damaged packaging) AND the positive outcome (working product, responsive support). Acknowledging only one side fails."
+  },
+  {
+    "task_id": "T03b",
+    "prompt": "Classify the sentiment of this tweet as Positive, Negative, or Neutral and give a one-sentence reason: 'Just got my order. Box was dented and the manual was missing, but honestly the device itself is flawless and set up in under 5 minutes.'",
+    "expected": "Label must be Mixed, Neutral, or Positive (NOT Negative). The reason MUST acknowledge both negatives (dented box, missing manual) AND positives (flawless device, fast setup). Acknowledging only one side fails."
+  },
+  {
+    "task_id": "T04",
+    "prompt": "Summarize the following passage in exactly two sentences: 'Machine learning is increasingly deployed in healthcare for diagnosis, treatment planning, and patient monitoring. These systems analyse medical images, predict patient deterioration, and spot patterns in electronic health records that might be missed by human clinicians. However, concerns remain about model interpretability, data privacy, liability when errors occur, and the potential for algorithmic bias to worsen existing healthcare disparities. Regulatory frameworks are still catching up with the pace of deployment, creating uncertainty for healthcare providers and technology developers alike.'",
+    "expected": "EXACTLY two sentences. Must capture both the opportunity (ML assisting clinical tasks: image analysis, prediction, pattern recognition) and the key challenges (interpretability, bias, privacy, liability, regulatory lag). More or fewer than two sentences fails; omitting either side fails."
+  },
+  {
+    "task_id": "T04b",
+    "prompt": "Summarize the following passage in exactly three bullet points, each no longer than 15 words: 'Remote work has transformed how companies operate globally. Employees gain flexibility and reduced commute times, leading to reported improvements in work-life balance. However, challenges persist around collaboration, company culture, and the blurring of personal and professional boundaries. Organisations are responding by investing in digital collaboration tools and rethinking office space as a hub for social and creative work rather than daily attendance.'",
+    "expected": "EXACTLY three bullet points, each under 15 words. Must cover: (1) benefits (flexibility, work-life balance), (2) challenges (collaboration, culture, boundary blur), (3) organisational response (digital tools, reimagined office). More/fewer than three bullets, or any bullet over 15 words, fails."
+  },
+  {
+    "task_id": "T05",
+    "prompt": "Extract all named entities from the following text and label each as PERSON, ORGANIZATION, LOCATION, or DATE: 'On March 15 2023, Sundar Pichai announced that Google would open a new AI research lab in Zurich, partnering with ETH Zurich to focus on large language model safety.'",
+    "expected": "Must identify and correctly label all five entities: Sundar Pichai (PERSON), March 15 2023 (DATE), Google (ORGANIZATION), Zurich (LOCATION), ETH Zurich (ORGANIZATION). Missing an entity or mislabelling more than one fails."
+  }
+]

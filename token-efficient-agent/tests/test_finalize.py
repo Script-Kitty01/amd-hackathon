@@ -1,15 +1,7 @@
-"""Tests for local answer finalization (T29)."""
+"""Tests for local answer finalization."""
 
 from src.categories import Category
-from src.finalize import finalize
-
-
-def test_math_extracts_answer_value():
-    assert finalize(Category.MATH, "Working: 40 * 0.75 = 30\nAnswer: 30") == "30"
-
-
-def test_math_without_answer_line_is_unchanged():
-    assert finalize(Category.MATH, "30") == "30"
+from src.finalize import finalize, strip_reasoning
 
 
 def test_ner_compacts_json():
@@ -30,9 +22,16 @@ def test_empty_stays_empty():
     assert finalize(Category.MATH, "") == ""
 
 
+def test_math_keeps_full_multipart_answer():
+    # Must NOT reduce to the last line — both values are needed by the judge.
+    raw = "30 cookies need 1.875 cups.\nCost = 1.875 x $2.40 = $4.50."
+    out = finalize(Category.MATH, raw)
+    assert "1.875" in out and "$4.50" in out
+
+
 def test_strips_think_block_math():
     raw = "<think>Let me compute 40*0.75 = 30, checking...</think>\nAnswer: 30"
-    assert finalize(Category.MATH, raw) == "30"
+    assert finalize(Category.MATH, raw) == "Answer: 30"
 
 
 def test_strips_think_block_prose():
@@ -41,17 +40,17 @@ def test_strips_think_block_prose():
 
 
 def test_strips_dangling_open_think():
-    # Truncated reasoning with no answer after the opener -> nothing usable.
+    # Truncated reasoning after a complete answer -> drop the dangling opener.
     raw = "Answer: 42\n<think>now let me double check by re-deriving"
-    assert finalize(Category.MATH, raw) == "42"
+    assert finalize(Category.MATH, raw) == "Answer: 42"
 
 
 def test_strips_dangling_close_think():
     # Opener lost to truncation; keep only what follows the close tag.
-    raw = "reasoning about the problem...</think>\nAnswer: London"
-    assert finalize(Category.LOGIC, raw) == "London"
+    raw = "reasoning about the problem...</think>\nLondon came first."
+    assert finalize(Category.LOGIC, raw) == "London came first."
 
 
-def test_logic_falls_back_to_last_line():
-    raw = "First, Alice isn't last. Carol beat Bob.\nAlice came first."
-    assert finalize(Category.LOGIC, raw) == "Alice came first"
+def test_strip_reasoning_idempotent():
+    cleaned = strip_reasoning("<think>x</think>hello")
+    assert strip_reasoning(cleaned) == cleaned == "hello"
