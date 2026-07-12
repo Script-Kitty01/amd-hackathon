@@ -4,14 +4,15 @@ name: Build and push agent image
 # no bundled model) on GitHub's runners and pushes it to GHCR — no local Docker
 # needed. The pushed image URL is what you submit (make the package public
 # first: repo -> Packages -> settings).
+#
+# MANUAL ONLY: this runs on workflow_dispatch, NOT on push. That is deliberate —
+# the submission image is built and pushed to :latest from a verified local
+# build, and an automatic push here would overwrite that verified image with a
+# different digest (and a multi-arch attestation manifest). Trigger this by hand
+# from the Actions tab only if you want CI to rebuild.
 
 on:
   workflow_dispatch: {}
-  push:
-    branches: [aamira, main]
-    paths:
-      - "token-efficient-agent/**"
-      - ".github/workflows/docker-build.yml"
 
 jobs:
   build-and-push:
@@ -45,6 +46,10 @@ jobs:
           file: ./token-efficient-agent/Dockerfile
           push: true
           platforms: linux/amd64
+          # Clean single-platform image: no provenance/SBOM attestation manifest
+          # (the "unknown/unknown" entry) that some grading harnesses choke on.
+          provenance: false
+          sbom: false
           tags: ghcr.io/script-kitty01/token-efficient-agent:latest
 
       - name: Report image size
