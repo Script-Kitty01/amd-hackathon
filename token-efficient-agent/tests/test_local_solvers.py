@@ -292,3 +292,14 @@ def test_unit_cost():
     s = UnitCostSolver().try_solve("12 items cost $60. What is the price per item?")
     assert s is not None
     assert "5" in s.answer
+
+
+# --- fraction of a number ---
+
+def test_fraction_of_number():
+    assert solve("What is 3/4 of 200?").answer == "150"
+
+
+def test_fraction_of_price():
+    s = solve("What is 1/3 of $90?")
+    assert s is not None and s.answer == "$30.00"

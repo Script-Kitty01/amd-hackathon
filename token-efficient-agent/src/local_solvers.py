@@ -39,6 +39,8 @@ class LocalSolver(Protocol):
 # --- deterministic math solver (T21) --------------------------------------
 
 _PCT_OF = re.compile(r"(\d+(?:\.\d+)?)\s*%\s*of\s*\$?\s*(\d[\d,]*(?:\.\d+)?)", re.I)
+# "3/4 of 200", "1/3 of $90" — exact fraction of a number.
+_FRAC_OF = re.compile(r"\b(\d+)\s*/\s*(\d+)\s+of\s+\$?\s*(\d[\d,]*(?:\.\d+)?)", re.I)
 _PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|percent)", re.I)
 _PRICE = re.compile(r"\$\s*(\d[\d,]*(?:\.\d+)?)")
 _PURE_EXPR = re.compile(r"^[\s\d+\-*/().]+$")
@@ -160,6 +162,17 @@ class MathSolver:
             pct, base = _num(m.group(1)), _num(m.group(2))
             currency = "$" in p[max(0, m.start() - 2): m.end() + 2]
             return Solution(_fmt(pct / 100.0 * base, currency), confidence=0.95)
+
+        # 1b) "A/B of C" — exact fraction of a number
+        m = _FRAC_OF.search(p)
+        if m and single_clean:
+            try:
+                num, den, base = float(m.group(1)), float(m.group(2)), _num(m.group(3))
+            except (ValueError, ZeroDivisionError):
+                den = 0
+            if den:
+                currency = "$" in p[max(0, m.start() - 2): m.end() + 2]
+                return Solution(_fmt(num / den * base, currency), confidence=0.95)
 
         # 2) percentage discount / increase on a $ price (single, clean step only)
         if single_clean:

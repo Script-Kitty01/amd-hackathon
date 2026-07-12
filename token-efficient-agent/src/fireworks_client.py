@@ -70,12 +70,11 @@ class FireworksClient:
             max_retries=0,
         )
         self._profiler = profiler
-        # Pass provider reasoning control via extra_body when configured. Thinking
-        # models (e.g. minimax) otherwise burn the max_tokens budget on hidden
-        # reasoning and truncate the answer; reasoning_effort=none fixes that.
-        self._extra_body = (
-            {"reasoning_effort": cfg.reasoning_effort} if cfg.reasoning_effort else None
-        )
+        # Per-call reasoning control via extra_body:
+        #  - non-reasoning categories -> "none" (no CoT tax)
+        #  - math/logic -> env override if set, else "low" (enough to reason on
+        #    arithmetic word problems without emitting a huge chain-of-thought)
+        self._reasoning_override = cfg.reasoning_effort or None
         # Models that reject reasoning_effort with a 400 (e.g. non-thinking models).
         # Learned at runtime so we send the param at most once to such a model,
         # then skip it. A 400 returns no usage, so this costs 0 tokens.
@@ -127,11 +126,13 @@ class FireworksClient:
         # the category genuinely doesn't need step-by-step thinking.
         if model not in self._no_extra_body:
             if not needs_reasoning:
-                # Force non-reasoning for cheap categories on all models.
-                kwargs["extra_body"] = {"reasoning_effort": "none"}
-            elif self._extra_body:
-                # Use global config (e.g. FIREWORKS_REASONING_EFFORT) for reasoning cats.
-                kwargs["extra_body"] = self._extra_body
+                # Cheap categories: suppress reasoning entirely (no CoT tax).
+                effort = "none"
+            else:
+                # Math/logic: limited reasoning — enough for arithmetic word
+                # problems, far fewer tokens than full chain-of-thought.
+                effort = self._reasoning_override or "low"
+            kwargs["extra_body"] = {"reasoning_effort": effort}
         if stop:
             kwargs["stop"] = stop
         content = f"{system}\n\n{user}" if system else user

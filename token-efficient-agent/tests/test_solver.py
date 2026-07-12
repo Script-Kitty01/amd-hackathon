@@ -141,3 +141,24 @@ def test_invalid_ner_escalates():
     out = solver.solve("t8", "Extract named entities from: Ada Lovelace in London.")
     assert client.calls == ["m0", "m1"]
     assert out.answer == '{"person":["Ada"]}'
+
+
+def test_valid_math_answer_no_double_call():
+    # A valid math answer from the primary must NOT trigger a second paid call.
+    client = FakeClient({"gemma-4-31b-it": ("The result is 42.", 30),
+                         "minimax-m3": ("42", 200)})
+    solver = Solver(_cfg(["gemma-4-31b-it", "minimax-m3"]), client)
+    out = solver.solve("m1", "What is 6 times 7 in this word problem?")
+    assert client.calls == ["gemma-4-31b-it"]  # single call
+    assert out.total_tokens == 30
+
+
+def test_math_copout_escalates():
+    # A cop-out math answer is invalid -> escalate to the reasoning model.
+    client = FakeClient({"gemma-4-31b-it": ("I cannot determine the answer.", 20),
+                         "minimax-m3": ("The answer is 42.", 40)})
+    solver = Solver(_cfg(["gemma-4-31b-it", "minimax-m3"]), client)
+    # Prompt routes to MATH (has "calculate" + numbers + operator).
+    out = solver.solve("m2", "Calculate 45 times 12 divided by the total steps.")
+    assert "minimax-m3" in client.calls
+    assert "42" in out.answer
