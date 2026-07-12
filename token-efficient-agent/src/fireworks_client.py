@@ -129,14 +129,9 @@ class FireworksClient:
                 # Cheap categories: suppress reasoning entirely (no CoT tax).
                 effort = "none"
             else:
-                # Math/logic: suppress the emitted chain-of-thought. Strong
-                # models still compute internally with reasoning_effort=none;
-                # they just don't emit a long (counted) CoT. Suppressing
-                # reasoning has consistently helped our accuracy (no <think>
-                # pollution reaching the judge) while cutting tokens.
-                # REVERT KNOB: if a resubmit shows a math/logic accuracy dip,
-                # change "none" back to "low" here.
-                effort = self._reasoning_override or "none"
+                # Math/logic: limited reasoning — enough for arithmetic word
+                # problems, far fewer tokens than full chain-of-thought.
+                effort = self._reasoning_override or "low"
             kwargs["extra_body"] = {"reasoning_effort": effort}
         if stop:
             kwargs["stop"] = stop
