@@ -151,17 +151,9 @@ class FireworksClient:
                 return self._create_once(model, system, user, max_tokens, stop, needs_reasoning)
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
-                # If the model rejects reasoning_effort, drop it and retry now.
+                # If the model rejects reasoning_effort (e.g. a non-thinking
+                # model), drop the param and retry immediately (0 tokens on 400).
                 if model not in self._no_extra_body and _is_reasoning_param_error(exc):
-                    if self._profiler and _is_retryable(exc):
-                        self._profiler.record_retry()
-                # If the model rejects reasoning_effort, drop it and retry now
-                # (doesn't consume a retry attempt; 400 costs 0 tokens).
-                if (
-                    self._extra_body
-                    and model not in self._no_extra_body
-                    and _is_reasoning_param_error(exc)
-                ):
                     self._no_extra_body.add(model)
                     try:
                         return self._create_once(model, system, user, max_tokens, stop, needs_reasoning)
@@ -170,6 +162,8 @@ class FireworksClient:
                         exc = exc2
                 if not _is_retryable(exc) or attempt == _MAX_RETRIES - 1:
                     raise
+                if self._profiler:
+                    self._profiler.record_retry()
                 delay = min(_MAX_DELAY, _BASE_DELAY * (2 ** attempt)) + random.uniform(0, 1)
                 time.sleep(delay)
         raise last_exc  # pragma: no cover

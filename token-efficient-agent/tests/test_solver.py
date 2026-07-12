@@ -35,7 +35,8 @@ class FakeClient:
         self.responses = responses
         self.calls = []
 
-    def complete(self, model, system, user, max_tokens, stop=None, needs_reasoning=False):
+    def complete(self, model, system, user, max_tokens, stop=None,
+                 needs_reasoning=False, task_id="unknown", category=None):
         self.calls.append(model)
         r = self.responses[model]
         if isinstance(r, Exception):

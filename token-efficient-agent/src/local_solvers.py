@@ -55,7 +55,7 @@ _PCT_WHAT = re.compile(
     r"what\s+percent(?:age)?\s+of\s+(\d+(?:\.\d+)?)\s+is\s+(\d+(?:\.\d+)?)", re.I
 )
 _ARITH = re.compile(
-    r"(-?\d+(?:\.\d+)?)\s+(plus|minus|times|multiplied by|divided by)\s+(-?\d+(?:\.\d+)?)$",
+    r"(-?\d+(?:\.\d+)?)\s+(plus|minus|times|multiplied by|divided by)\s+(-?\d+(?:\.\d+)?)",
     re.I,
 )
 _SIMPLE_ARITH = re.compile(
@@ -800,9 +800,9 @@ _SOLVERS: dict[Category, list[LocalSolver]] = {
     # Sentiment: clear one-sided signals only. Abstains on any contrastive text
     # ("but", "however", "although") and on mixed pos/neg signals.
     # The judge's mixed-review tasks always have contrastive language → Fireworks.
-    Category.MATH: [MathSolver()],
-    Category.NER: [NERSolver()],
     Category.SENTIMENT: [SentimentSolver()],
+    # NER stays Fireworks-only: the regex heuristic can miss entities or
+    # mislabel, and the judge requires ALL entities with correct labels.
 }
 
 
