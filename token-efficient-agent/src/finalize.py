@@ -25,19 +25,33 @@ import re
 from .categories import Category
 
 # Reasoning/thinking blocks emitted by "thinking" models. Matched case-insensitively.
+# Covers: <think>, <thinking>, <reasoning>, <thought>, <scratchpad> (standard),
+#         <mm:think> (MiniMax M3), <|think|> (Gemma 4).
 _THINK_BLOCK = re.compile(
-    r"<\s*(think|thinking|reasoning|thought|scratchpad)\s*>.*?<\s*/\s*\1\s*>",
+    r"<\s*(think|thinking|reasoning|thought|scratchpad)\s*>.*?<\s*/\s*\1\s*>|"
+    r"<mm:think>.*?</mm:think>|"
+    r"<\|think\|>.*?<\|/think\|>",
     re.I | re.S,
 )
-_CLOSE_TAG = re.compile(r"<\s*/\s*(?:think|thinking|reasoning|thought|scratchpad)\s*>", re.I)
-_OPEN_TAG = re.compile(r"<\s*(?:think|thinking|reasoning|thought|scratchpad)\s*>", re.I)
+_CLOSE_TAG = re.compile(
+    r"<\s*/\s*(?:think|thinking|reasoning|thought|scratchpad)\s*>|"
+    r"</mm:think>|<\|/think\|>",
+    re.I,
+)
+_OPEN_TAG = re.compile(
+    r"<\s*(?:think|thinking|reasoning|thought|scratchpad)\s*>|"
+    r"<mm:think>|<\|think\|>",
+    re.I,
+)
 # A dangling close tag (opener lost to truncation): keep only what follows it.
 _DANGLING_CLOSE = re.compile(
-    r".*<\s*/\s*(?:think|thinking|reasoning|thought|scratchpad)\s*>", re.I | re.S
+    r".*(?:<\s*/\s*(?:think|thinking|reasoning|thought|scratchpad)\s*>|</mm:think>|<\|/think\|>)",
+    re.I | re.S,
 )
 # A dangling open tag (answer never emitted after it): drop from the tag onward.
 _DANGLING_OPEN = re.compile(
-    r"<\s*(?:think|thinking|reasoning|thought|scratchpad)\s*>.*$", re.I | re.S
+    r"(?:<\s*(?:think|thinking|reasoning|thought|scratchpad)\s*>|<mm:think>|<\|think\|>).*$",
+    re.I | re.S,
 )
 
 

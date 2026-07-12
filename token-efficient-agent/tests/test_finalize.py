@@ -34,6 +34,18 @@ def test_strips_think_block_math():
     assert finalize(Category.MATH, raw) == "Answer: 30"
 
 
+def test_strips_mm_think_block():
+    # MiniMax M3 uses <mm:think> tags
+    raw = "<mm:think>Let me solve step by step. 2400 * 0.37 = 888...</mm:think>\nThe answer is 1672."
+    assert finalize(Category.MATH, raw) == "The answer is 1672."
+
+
+def test_strips_gemma_think_block():
+    # Gemma 4 uses <|think|> tags
+    raw = "<|think|>Reasoning about the problem...<|/think|>\nParis is the capital of France."
+    assert finalize(Category.FACTUAL, raw) == "Paris is the capital of France."
+
+
 def test_strips_think_block_prose():
     raw = "<think>The user wants the capital.</think>Paris is the capital of France."
     assert finalize(Category.FACTUAL, raw) == "Paris is the capital of France."

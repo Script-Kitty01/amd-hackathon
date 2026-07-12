@@ -80,8 +80,13 @@ class FireworksClient:
         resp = self._create_with_retry(model, system, user, max_tokens)
         usage = resp.usage
         choice = resp.choices[0]
+        # Some thinking models (kimi-k2p7-code) put the answer in `content` and
+        # reasoning in a separate field. Others (minimax-m3 via vLLM) may leak
+        # reasoning tags directly into `content`. We read content only — the
+        # caller's strip_reasoning handles any leaked tags.
+        text = (choice.message.content or "").strip()
         return LLMResult(
-            text=(choice.message.content or "").strip(),
+            text=text,
             prompt_tokens=getattr(usage, "prompt_tokens", 0),
             completion_tokens=getattr(usage, "completion_tokens", 0),
             total_tokens=getattr(usage, "total_tokens", 0),
