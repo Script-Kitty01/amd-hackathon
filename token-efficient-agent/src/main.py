@@ -29,7 +29,12 @@ from .local_llm import LocalLLM
 from .solver import Solver
 from .thresholds import load_thresholds
 
-MAX_WORKERS = 8
+# Each task is a blocking HTTP call to Fireworks — the work is I/O-bound, not
+# CPU-bound, so we can run far more concurrent requests than we have vCPUs. High
+# concurrency is the main lever for finishing every task before the 10-minute
+# cap on the slow 2-vCPU grading box (unfinished tasks ship an empty fallback,
+# which the judge counts as wrong). Overridable via MAX_WORKERS.
+MAX_WORKERS = int(os.environ.get("MAX_WORKERS", "24"))
 _FALLBACK = "Unable to produce an answer."
 
 

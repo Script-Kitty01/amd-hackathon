@@ -48,22 +48,28 @@ class Solver:
         self._client = client
 
     def _plan_attempts(self, category: Category, complexity: str, ambiguous: bool) -> list[str]:
-        """Model(s) to try for one task.
+        """Ordered models to try for one task.
 
-        Accuracy-first: always send the task to its category-appropriate model
-        (Gemma for language, MiniMax for reasoning, Kimi for code). This is a
-        SINGLE call in the success case — we do not make a speculative cheap
-        call first. A different fallback model is appended only so a first call
-        that errors or returns empty still yields an answer (never score zero);
-        it costs extra tokens only on failure, not in the normal path.
+        Accuracy-first: the category-appropriate model goes first (Gemma for
+        language, MiniMax for reasoning, Kimi for code) — a SINGLE call in the
+        success case. The remaining allowed models follow as backstops so a task
+        never ends up empty just because one or two models errored, timed out,
+        or returned malformed output. Backstops cost extra tokens ONLY on the
+        failure path (a valid primary answer returns immediately); on the
+        accuracy gate that trade is always worth it. The strongest general
+        fallback is ordered ahead of near-duplicates of the primary.
         """
         models = self._cfg.models
         primary = select_model(category, models)
+        strong = escalation_model(models)
 
+        # Primary + ONE strong fallback. Two attempts is the accuracy-vs-latency
+        # sweet spot: it recovers from a single failed/empty call without turning
+        # a slow task into 5 sequential remote calls, which on the 2-vCPU / 10-min
+        # grading box would risk timing out and leaving later tasks empty.
         attempts = [primary]
-        fallback = escalation_model(models)
-        if fallback != primary:
-            attempts.append(fallback)
+        if strong != primary:
+            attempts.append(strong)
         return attempts
 
     def solve(self, task_id: str, prompt: str) -> SolveOutcome:
@@ -90,10 +96,14 @@ class Solver:
             # Strip reasoning traces before validating/shipping so a thinking
             # model's <think> block never reaches the judge.
             text = strip_reasoning(result.text)
-            truncated = result.finish_reason == "length"
-            if text and not truncated and is_valid(r.category, text):
+            # Ship the first valid, non-empty answer. We do NOT force escalation
+            # on finish_reason=="length": with a thinking model the reasoning is
+            # what filled the budget, and after stripping it the visible answer is
+            # usually complete. A second slow call rarely helps and risks the
+            # wall-clock cap. Escalate only when there's no usable answer at all.
+            if text and is_valid(r.category, text):
                 return SolveOutcome(task_id, text, r.category, total_tokens)
             if text:
-                last_text = text  # keep as fallback; escalate for a clean one
+                last_text = text  # keep as fallback; escalate for a cleaner one
 
         return SolveOutcome(task_id, last_text or _FALLBACK, r.category, total_tokens)

@@ -107,17 +107,31 @@ def test_single_model_no_escalation():
     assert out.answer == "Positive."
 
 
-def test_truncated_answer_escalates():
-    # A primary answer cut off by max_tokens (finish_reason == "length") is
-    # treated as unusable and escalates; both calls are counted.
+def test_truncated_but_valid_answer_is_kept():
+    # A thinking model often reports finish_reason=="length" because reasoning
+    # filled the budget; the visible answer is still usable. We ship it on the
+    # first call rather than paying for a second (slow) call.
     client = FakeClient(
-        {"minimax-m3": ("cut off", 50, "length"), "kimi-k2p7-code": ("Full answer.", 30)}
+        {"minimax-m3": ("A complete enough answer.", 50, "length"),
+         "kimi-k2p7-code": ("Full answer.", 30)}
     )
     solver = Solver(_cfg(["minimax-m3", "kimi-k2p7-code"]), client)
     out = solver.solve("t7", "Explain what recursion is.")
+    assert client.calls == ["minimax-m3"]
+    assert out.answer == "A complete enough answer."
+    assert out.total_tokens == 50
+
+
+def test_empty_answer_still_escalates():
+    # If the primary yields nothing usable, we still fall back to the next model.
+    client = FakeClient(
+        {"minimax-m3": ("", 10, "length"), "kimi-k2p7-code": ("Full answer.", 30)}
+    )
+    solver = Solver(_cfg(["minimax-m3", "kimi-k2p7-code"]), client)
+    out = solver.solve("t7b", "Explain what recursion is.")
     assert client.calls == ["minimax-m3", "kimi-k2p7-code"]
     assert out.answer == "Full answer."
-    assert out.total_tokens == 80
+    assert out.total_tokens == 40
 
 
 def test_invalid_ner_escalates():
