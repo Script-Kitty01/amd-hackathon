@@ -34,18 +34,8 @@ def _looks_like_ner(text: str) -> bool:
     return bool(_NER_LABEL.search(text))
 
 
-_COPOUT = re.compile(r"\b(cannot|can't|can not|unable|insufficient|not enough|"
-                     r"need more (?:information|context))\b", re.I)
-
-
 def is_valid(category: Category, answer: str) -> bool:
-    """True if the answer is well-formed AND usable enough to ship.
-
-    This is the SINGLE accept/reject gate the solver uses. If it passes, we ship
-    the answer with NO further escalation (no double-charged Fireworks calls).
-    So cop-out answers ("I cannot solve this") are treated as invalid here for
-    the categories where they signal a wrong answer, forcing escalation.
-    """
+    """True if the answer is well-formed enough to ship for its category."""
     text = (answer or "").strip()
     if not text or text == _FALLBACK:
         return False
@@ -57,15 +47,11 @@ def is_valid(category: Category, answer: str) -> bool:
     if category in (Category.CODE_DEBUG, Category.CODE_GEN):
         # Must contain something code-like
         return bool(_HAS_CODE.search(text)) or "return" in text.lower()
-    if category in (Category.MATH, Category.LOGIC):
-        # A reasoning answer that cops out ("cannot determine") is unusable.
-        if _COPOUT.search(text):
-            return False
-        if category == Category.MATH:
-            return bool(_HAS_NUMBER.search(text))
-        return True  # logic: non-empty, non-cop-out
+    if category == Category.MATH:
+        # Must contain at least one number
+        return bool(_HAS_NUMBER.search(text))
 
-    # Factual, Summarization: any non-empty answer is valid
+    # Factual, Summarization, Logic: any non-empty answer is valid
     return True
 
 

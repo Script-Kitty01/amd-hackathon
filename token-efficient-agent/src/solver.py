@@ -21,7 +21,7 @@ from .config import Config
 from .finalize import finalize
 from .prompts import spec_for
 from .router import route
-from .validate import is_valid
+from .validate import is_valid, needs_escalation
 
 if TYPE_CHECKING:
     from .fireworks_client import FireworksClient
@@ -84,7 +84,7 @@ class Solver:
         user = compress(prompt)
 
         total_tokens = 0
-        last_text = ""  # best non-empty answer seen, used only if ALL attempts invalid
+        last_text = ""  # best non-empty answer seen
         for model in attempts:
             try:
                 result = self._client.complete(
@@ -98,17 +98,19 @@ class Solver:
                     category=r.category,
                 )
             except Exception:
-                continue  # transient/network error — try the next model
+                continue  # try the next model
             total_tokens += result.total_tokens
             text = finalize(r.category, result.text)
 
-            # SINGLE gate: accept the first VALID answer and stop immediately.
-            # No second escalation on an already-valid answer -> no double-charge.
-            # We only pay for another model when this one produced nothing usable
-            # (empty, malformed shape, or a cop-out on math/logic).
+            # Accept the first valid answer that doesn't need escalation
             if text and is_valid(r.category, text):
-                return SolveOutcome(task_id, text, r.category, total_tokens)
-            if text:
-                last_text = text  # keep the best partial as a last-resort fallback
+                if not needs_escalation(r.category, text):
+                    return SolveOutcome(task_id, text, r.category, total_tokens)
+                # Answer is structurally valid but weak — keep it, try escalation
+                if not last_text or len(text) > len(last_text):
+                    last_text = text
+            elif text:
+                last_text = text  # keep as fallback
+
 
         return SolveOutcome(task_id, last_text or _FALLBACK, r.category, total_tokens)
