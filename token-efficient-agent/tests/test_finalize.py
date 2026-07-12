@@ -28,3 +28,30 @@ def test_generic_strips_whitespace():
 
 def test_empty_stays_empty():
     assert finalize(Category.MATH, "") == ""
+
+
+def test_strips_think_block_math():
+    raw = "<think>Let me compute 40*0.75 = 30, checking...</think>\nAnswer: 30"
+    assert finalize(Category.MATH, raw) == "30"
+
+
+def test_strips_think_block_prose():
+    raw = "<think>The user wants the capital.</think>Paris is the capital of France."
+    assert finalize(Category.FACTUAL, raw) == "Paris is the capital of France."
+
+
+def test_strips_dangling_open_think():
+    # Truncated reasoning with no answer after the opener -> nothing usable.
+    raw = "Answer: 42\n<think>now let me double check by re-deriving"
+    assert finalize(Category.MATH, raw) == "42"
+
+
+def test_strips_dangling_close_think():
+    # Opener lost to truncation; keep only what follows the close tag.
+    raw = "reasoning about the problem...</think>\nAnswer: London"
+    assert finalize(Category.LOGIC, raw) == "London"
+
+
+def test_logic_falls_back_to_last_line():
+    raw = "First, Alice isn't last. Carol beat Bob.\nAlice came first."
+    assert finalize(Category.LOGIC, raw) == "Alice came first"

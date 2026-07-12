@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 from .categories import Category, escalation_model, select_model
 from .compress import compress
 from .config import Config
+from .finalize import strip_reasoning
 from .prompts import spec_for
 from .router import route
 from .validate import is_valid
@@ -86,10 +87,13 @@ class Solver:
             except Exception:
                 continue  # try the next tier
             total_tokens += result.total_tokens
+            # Strip reasoning traces before validating/shipping so a thinking
+            # model's <think> block never reaches the judge.
+            text = strip_reasoning(result.text)
             truncated = result.finish_reason == "length"
-            if result.text and not truncated and is_valid(r.category, result.text):
-                return SolveOutcome(task_id, result.text, r.category, total_tokens)
-            if result.text:
-                last_text = result.text  # keep as fallback; escalate for a clean one
+            if text and not truncated and is_valid(r.category, text):
+                return SolveOutcome(task_id, text, r.category, total_tokens)
+            if text:
+                last_text = text  # keep as fallback; escalate for a clean one
 
         return SolveOutcome(task_id, last_text or _FALLBACK, r.category, total_tokens)
