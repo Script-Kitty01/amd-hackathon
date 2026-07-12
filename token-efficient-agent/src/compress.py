@@ -24,13 +24,28 @@ _FILLER_PREFIX = re.compile(
     r"i(?:'d| would) like you to|i want you to|would you)\b[\s,:]*",
     re.I,
 )
+# Redundant instructions to be removed globally.
+_REDUNDANT_INSTRUCTIONS = re.compile(
+    r"\b(in a clear and concise manner|step by step|step-by-step|make sure to|be sure to|"
+    r"in the required format|based on the text provided|according to the context|"
+    r"using the information given|think carefully|explain your reasoning)\b[.,]?\s*",
+    re.I,
+)
+# Keywords that signal a constraint that must be preserved.
+_CONSTRAINT_KEYWORDS = re.compile(
+    r"\b(exactly|only|JSON|Answer:|format|at most|no more than)\b", re.I
+)
 
 
 def _compress_prose(seg: str) -> str:
+    # Preserve segments containing constraints from instruction removal.
+    if _CONSTRAINT_KEYWORDS.search(seg):
+        return seg
     seg = _MULTISPACE.sub(" ", seg)
     seg = _MULTINEWLINE.sub("\n\n", seg)
     # Trim spaces around newlines.
     seg = re.sub(r" *\n *", "\n", seg)
+    seg = _REDUNDANT_INSTRUCTIONS.sub("", seg)
     return seg
 
 

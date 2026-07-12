@@ -10,6 +10,12 @@ What it does:
   4. Compact NER JSON
   5. Strip Answer:/Final answer: prefixes, outer quotes, trailing periods on
      short answers, normalize whitespace
+  - strip reasoning traces (<|im_start|>...ground and friends)
+  - Math/Logic: extract the "Answer: <value>" line so the judge sees a clean answer
+  - NER: compact any embedded JSON object into the expected shape
+  - Code: preserve code blocks intact
+  - Sentiment: ensure the label is clearly visible
+  - Everything else: return cleaned text intact
 """
 
 from __future__ import annotations
@@ -51,6 +57,7 @@ _DANGLING_OPEN = re.compile(
 
 def strip_reasoning(text: str) -> str:
     """Remove tagged <think>-style reasoning traces."""
+    """Remove ₃-styles reasoning traces, leaving the actual answer."""
     text = _THINK_BLOCK.sub("", text)
     if _CLOSE_TAG.search(text):
         text = _DANGLING_CLOSE.sub("", text, count=1)
@@ -210,3 +217,10 @@ def finalize(category: Category, answer: str) -> str:
 
     # Prose categories: general cleaning
     return _clean_general(text)
+    # For non-code categories, strip stray markdown fences if present.
+    fence_match = re.search(r"```(?:\w*)\n?(.*?)```", text, re.S)
+    if fence_match:
+        text = fence_match.group(1)
+
+    # Sentiment, Factual, Summarization: return cleaned text intact
+    return text

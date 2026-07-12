@@ -9,10 +9,15 @@ from __future__ import annotations
 import random
 import time
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from openai import OpenAI
 
 from .config import Config
+
+if TYPE_CHECKING:
+    from .categories import Category
+
 
 _MAX_RETRIES = 3
 _BASE_DELAY = 2.0  # seconds; exponential backoff for transient/rate-limit errors
@@ -55,7 +60,7 @@ def _is_reasoning_param_error(exc: Exception) -> bool:
 
 
 class FireworksClient:
-    def __init__(self, cfg: Config) -> None:
+    def __init__(self, cfg: Config, profiler: Any | None = None) -> None:
         # Hard per-request timeout so a stuck call can never hang the run past
         # the 10-minute cap. We manage retries ourselves, so disable the SDK's.
         self._client = OpenAI(
@@ -64,6 +69,7 @@ class FireworksClient:
             timeout=_REQUEST_TIMEOUT,
             max_retries=0,
         )
+        self._profiler = profiler
         # Pass provider reasoning control via extra_body when configured. Thinking
         # models (e.g. minimax) otherwise burn the max_tokens budget on hidden
         # reasoning and truncate the answer; reasoning_effort=none fixes that.
@@ -83,19 +89,32 @@ class FireworksClient:
         max_tokens: int,
         stop: list[str] | None = None,
         needs_reasoning: bool = False,
+        # Profiling metadata:
+        task_id: str = "unknown",
+        category: "Category | None" = None,
     ) -> LLMResult:
         """Single deterministic chat completion. Retries transient/rate-limit errors."""
         resp = self._create_with_retry(model, system, user, max_tokens, stop, needs_reasoning)
         usage = resp.usage
         choice = resp.choices[0]
         text = (choice.message.content or "").strip()
-        return LLMResult(
+        result = LLMResult(
             text=text,
             prompt_tokens=getattr(usage, "prompt_tokens", 0),
             completion_tokens=getattr(usage, "completion_tokens", 0),
             total_tokens=getattr(usage, "total_tokens", 0),
             finish_reason=getattr(choice, "finish_reason", "") or "",
         )
+        if self._profiler:
+            self._profiler.record(
+                task_id=task_id,
+                category=str(category.value) if category else "unknown",
+                model=model,
+                prompt=result.prompt_tokens,
+                completion=result.completion_tokens,
+                total=result.total_tokens,
+            )
+        return result
 
     def _create_once(self, model: str, system: str, user: str, max_tokens: int,
                      stop: list[str] | None = None, needs_reasoning: bool = False):
@@ -134,6 +153,15 @@ class FireworksClient:
                 last_exc = exc
                 # If the model rejects reasoning_effort, drop it and retry now.
                 if model not in self._no_extra_body and _is_reasoning_param_error(exc):
+                    if self._profiler and _is_retryable(exc):
+                        self._profiler.record_retry()
+                # If the model rejects reasoning_effort, drop it and retry now
+                # (doesn't consume a retry attempt; 400 costs 0 tokens).
+                if (
+                    self._extra_body
+                    and model not in self._no_extra_body
+                    and _is_reasoning_param_error(exc)
+                ):
                     self._no_extra_body.add(model)
                     try:
                         return self._create_once(model, system, user, max_tokens, stop, needs_reasoning)

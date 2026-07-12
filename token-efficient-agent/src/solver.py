@@ -13,7 +13,7 @@ vs. failing the accuracy gate.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .categories import Category, escalation_model, select_model
 from .compress import compress
@@ -39,9 +39,15 @@ _FALLBACK = "Unable to produce an answer."
 
 
 class Solver:
-    def __init__(self, cfg: Config, client: "FireworksClient") -> None:
+    def __init__(
+        self,
+        cfg: Config,
+        client: "FireworksClient",
+        profiler: Any | None = None,
+    ) -> None:
         self._cfg = cfg
         self._client = client
+        self._profiler = profiler
 
     def _plan_attempts(self, category: Category, complexity: str, ambiguous: bool) -> list[str]:
         """Ordered models to try for one task.
@@ -88,6 +94,8 @@ class Solver:
                     max_tokens=spec.max_tokens,
                     stop=spec.stop,
                     needs_reasoning=spec.needs_reasoning,
+                    task_id=task_id,
+                    category=r.category,
                 )
             except Exception:
                 continue  # try the next model
@@ -103,5 +111,6 @@ class Solver:
                     last_text = text
             elif text:
                 last_text = text  # keep as fallback
+
 
         return SolveOutcome(task_id, last_text or _FALLBACK, r.category, total_tokens)

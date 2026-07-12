@@ -55,7 +55,11 @@ _PCT_WHAT = re.compile(
     r"what\s+percent(?:age)?\s+of\s+(\d+(?:\.\d+)?)\s+is\s+(\d+(?:\.\d+)?)", re.I
 )
 _ARITH = re.compile(
-    r"(-?\d+(?:\.\d+)?)\s+(plus|minus|times|multiplied by|divided by)\s+(-?\d+(?:\.\d+)?)",
+    r"(-?\d+(?:\.\d+)?)\s+(plus|minus|times|multiplied by|divided by)\s+(-?\d+(?:\.\d+)?)$",
+    re.I,
+)
+_SIMPLE_ARITH = re.compile(
+    r"what is (-?\d+(?:\.\d+)?)\s*(plus|\+|minus|-|times|\*|divided by|/)\s*(-?\d+(?:\.\d+)?)\??$",
     re.I,
 )
 _NUM_RE = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
@@ -103,13 +107,13 @@ def _all_numbers_consumed(prompt: str, consumed: set[float]) -> bool:
 
 def _apply_op(a: float, op: str, b: float) -> Optional[float]:
     op = op.lower()
-    if op == "plus":
+    if op in ("plus", "+"):
         return a + b
-    if op == "minus":
+    if op in ("minus", "-"):
         return a - b
-    if op in ("times", "multiplied by"):
+    if op in ("times", "multiplied by", "*"):
         return a * b
-    if op == "divided by":
+    if op in ("divided by", "/"):
         return a / b if b != 0 else None
     return None
 
@@ -136,6 +140,13 @@ class MathSolver:
     def try_solve(self, prompt: str) -> Optional[Solution]:
         p = prompt.strip()
         low = p.lower()
+
+        # Highest-confidence patterns first
+        m = _SIMPLE_ARITH.search(p)
+        if m:
+            result = _apply_op(_num(m.group(1)), m.group(2), _num(m.group(3)))
+            if result is not None:
+                return Solution(_fmt(result, "$" in p), confidence=0.99)
 
         # Multi-step / multi-percentage problems are beyond this solver — abstain
         # rather than return a confidently-wrong single-step answer.
@@ -419,7 +430,7 @@ _CONTRAST = re.compile(
 )
 
 # Words start with a letter; internal apostrophes kept (don't), surrounding
-# quotes excluded (so 'great' tokenizes to great, not 'great).
+# quotes excluded (so 'great' tokenizes to great, not 'great').
 _WORD_RE = re.compile(r"[a-z]+(?:'[a-z]+)*")
 
 
@@ -624,6 +635,8 @@ _SOLVERS: dict[Category, list[LocalSolver]] = {
     # Sentiment: clear one-sided signals only. Abstains on any contrastive text
     # ("but", "however", "although") and on mixed pos/neg signals.
     # The judge's mixed-review tasks always have contrastive language → Fireworks.
+    Category.MATH: [MathSolver()],
+    Category.NER: [NERSolver()],
     Category.SENTIMENT: [SentimentSolver()],
 }
 

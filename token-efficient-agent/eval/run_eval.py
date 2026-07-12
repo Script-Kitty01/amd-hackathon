@@ -33,6 +33,7 @@ from src.solver import Solver
 from src.thresholds import load_thresholds
 
 from .judge import Judge
+from .profiler import TokenProfiler
 from .scorer import EvalRecord, EvalReport, check_match
 
 DEFAULT_DATASET = "eval/datasets/sample_tasks.json"
@@ -52,13 +53,13 @@ def _load_dotenv(path: str = ".env") -> None:
             os.environ.setdefault(key.strip(), val.strip())
 
 
-def _build_fireworks_solver() -> Solver | None:
+def _build_fireworks_solver(profiler: "TokenProfiler" | None = None) -> Solver | None:
     """Build the Fireworks/fallback solver if its env is configured, else None."""
     try:
         cfg = load_config()
     except KeyError:
         return None
-    return Solver(cfg, FireworksClient(cfg))
+    return Solver(cfg, FireworksClient(cfg, profiler=profiler))
 
 
 # --- single run ------------------------------------------------------------
@@ -67,7 +68,8 @@ def run_single(dataset_path: str) -> None:
     _load_dotenv()
     items = _load(dataset_path)
 
-    fireworks_solver = _build_fireworks_solver()
+    profiler = TokenProfiler()
+    fireworks_solver = _build_fireworks_solver(profiler=profiler)
     local_llm = LocalLLM.from_env()
     judge = Judge.from_env()
 
@@ -111,6 +113,7 @@ def run_single(dataset_path: str) -> None:
     print(f"wall time:    {elapsed:.1f}s")
     if judge is not None:
         print(f"judge tokens: {judge.total_tokens} (not counted toward agent score)")
+    profiler.print_report()
 
 
 def run_cloud_only(dataset_path: str) -> None:
@@ -122,7 +125,8 @@ def run_cloud_only(dataset_path: str) -> None:
     _load_dotenv()
     items = _load(dataset_path)
 
-    solver = _build_fireworks_solver()
+    profiler = TokenProfiler()
+    solver = _build_fireworks_solver(profiler=profiler)
     if solver is None:
         print("cloud-only requires FIREWORKS_* env vars (the cloud fallback). Aborting.")
         return
@@ -151,6 +155,7 @@ def run_cloud_only(dataset_path: str) -> None:
 
     print("\n" + report.summary())
     print(f"wall time:    {time.time() - start:.1f}s")
+    profiler.print_report()
 
 
 # --- model sweep (T8) ------------------------------------------------------
