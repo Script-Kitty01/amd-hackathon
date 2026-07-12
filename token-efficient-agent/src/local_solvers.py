@@ -409,13 +409,13 @@ class SpacyNERSolver:
 
 # --- registry --------------------------------------------------------------
 
-# Accuracy-first baseline: only the deterministic MATH solver runs locally.
-# It answers just strict, unambiguous patterns (0 tokens) and abstains on
-# anything uncertain, so it's a pure win — correct AND free. Lexicon sentiment
-# and heuristic/spaCy NER are held back (format + nuance risk for the LLM judge)
-# and routed to Fireworks instead. Re-enable per category once each is verified.
+# Accuracy-first: enable MATH solver (deterministic, high precision) and
+# regex-based NER solver (no dependencies, decent precision for clear entities).
+# SpaCy NER is available but not registered since spaCy isn't in requirements
+# to keep the image lean. The regex NER is good enough as a 0-token tier.
 _SOLVERS: dict[Category, list[LocalSolver]] = {
     Category.MATH: [MathSolver()],
+    Category.NER: [NERSolver()],
 }
 
 

@@ -42,17 +42,23 @@ MODEL_PREFERENCE: dict[Category, int] = {}
 # ever return a model that IS permitted; if no hint matches, select_model falls
 # back to the first allowed model (always compliant).
 MODEL_HINTS: dict[Category, tuple[str, ...]] = {
-    # Code -> a code-specialised model.
-    Category.CODE_DEBUG: ("kimi", "code"),
-    Category.CODE_GEN: ("kimi", "code"),
-    # Multi-step reasoning -> a reasoning model.
-    Category.LOGIC: ("minimax", "m3"),
-    Category.MATH: ("minimax", "m3"),
-    # Language / knowledge tasks -> Gemma.
-    Category.FACTUAL: ("gemma",),
-    Category.SENTIMENT: ("gemma",),
-    Category.SUMMARIZATION: ("gemma",),
-    Category.NER: ("gemma",),
+    # Gemma-first doctrine: Gemma is non-reasoning by default + densest tokenizer
+    # (262k vocab) = cheapest on every axis. Escalation to reasoning models only
+    # happens via the escalation_model fallback path.
+    #
+    # Code -> gemma-4-31b-it first (LiveCodeBench 80%, non-reasoning, terse).
+    # Escalation to kimi only if gemma fails.
+    Category.CODE_DEBUG: ("gemma", "31b"),
+    Category.CODE_GEN: ("gemma", "31b"),
+    # Math/Logic -> gemma-4-31b-it first (AIME 89.2%, non-reasoning).
+    # Escalation to minimax-m3 (thinking-on) only if gemma fails.
+    Category.LOGIC: ("gemma", "31b"),
+    Category.MATH: ("gemma", "31b"),
+    # Language / knowledge tasks -> Gemma 31b for quality (not the tiny 26b).
+    Category.FACTUAL: ("gemma", "31b"),
+    Category.SENTIMENT: ("gemma", "31b"),
+    Category.SUMMARIZATION: ("gemma", "31b"),
+    Category.NER: ("gemma", "31b"),
 }
 
 _PREF_ENV = "MODEL_PREFERENCE_PATH"
@@ -101,6 +107,11 @@ def select_model(category: Category, models: list[str]) -> str:
 def escalation_model(models: list[str]) -> str:
     """Strongest available model, used when a primary attempt fails.
 
-    Assumes ALLOWED_MODELS is ordered cheapest -> most capable (see module docs).
+    Prefers minimax-m3 (strong reasoning) as the escalation target, then kimi
+    for code. Falls back to the last model in the list if neither is found.
     """
+    for hint in ("minimax", "kimi"):
+        for m in models:
+            if hint in m.lower():
+                return m
     return models[-1]

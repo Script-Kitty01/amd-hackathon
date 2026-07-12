@@ -21,27 +21,25 @@ from dataclasses import dataclass
 from .categories import Category
 
 # Min confidence to accept a DETERMINISTIC local-solver answer.
-# Only the MATH solver runs locally now, and it already abstains unless the
-# pattern is a clean, unambiguous match — so trust its answers (it returns
-# 0.88-0.95). Sentiment/NER solvers are disabled (see local_solvers registry);
-# their thresholds are moot but kept for when they're re-enabled + verified.
+# Math solver returns 0.88-0.95 for clean patterns. NER via spaCy returns 0.85.
 _DEFAULT_LOCAL_SOLVER: dict[Category, float] = {
     Category.MATH: 0.85,       # accept the deterministic math solver's outputs
-    Category.SENTIMENT: 0.85,
-    Category.NER: 0.90,
+    Category.SENTIMENT: 0.80,
+    Category.NER: 0.80,        # spaCy is reliable enough at 0.85 confidence
 }
 
-# Min confidence to accept a LOCAL LLM answer. 0.99 => effectively always escalate.
-# ACCURACY FIRST: Very high thresholds to force escalation to Fireworks models
+# Min confidence to accept a LOCAL LLM answer.
+# On the grading box (4GB/2vCPU), the local LLM may not even be available.
+# When it IS available, accept its answers for easy categories to save tokens.
 _DEFAULT_LOCAL_LLM: dict[Category, float] = {
-    Category.FACTUAL: 0.85,     # escalate most factual questions
-    Category.SUMMARIZATION: 0.80,  # escalate most summarization
-    Category.SENTIMENT: 0.85,   # escalate most sentiment
-    Category.NER: 0.85,         # escalate most NER
-    Category.CODE_GEN: 0.95,    # escalate almost all code generation
-    Category.CODE_DEBUG: 0.99,  # escalate all debugging
-    Category.MATH: 0.99,        # escalate all math
-    Category.LOGIC: 0.99,       # escalate all logic
+    Category.FACTUAL: 0.65,        # local LLM is decent at factual
+    Category.SUMMARIZATION: 0.65,  # local LLM handles summarization well
+    Category.SENTIMENT: 0.65,      # local LLM handles simple sentiment
+    Category.NER: 0.75,            # less reliable, prefer spaCy or Fireworks
+    Category.CODE_GEN: 0.90,       # escalate most code generation
+    Category.CODE_DEBUG: 0.99,     # escalate all debugging
+    Category.MATH: 0.99,           # escalate all math (use deterministic solver)
+    Category.LOGIC: 0.99,          # escalate all logic
 }
 
 _FALLBACK_SOLVER = 0.90  # More conservative fallback

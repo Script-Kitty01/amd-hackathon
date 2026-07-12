@@ -70,13 +70,23 @@ def test_low_confidence_local_escalates_to_fireworks():
 
 
 def test_local_llm_distrusted_escalates_to_fireworks():
-    # Accuracy-first: even a confident local-LLM factual answer is distrusted
-    # (threshold raised to 0.85 > factual prior 0.70) and escalates to Fireworks.
+    # With a strict threshold (0.85 > factual prior 0.70), local LLM escalates.
+    strict = Thresholds(local_solver_thr={}, local_llm_thr={Category.FACTUAL: 0.85})
     fw = FakeFireworks()
-    c = Cascade(fireworks_solver=fw, local_llm=const_llm("Paris"))
+    c = Cascade(thresholds=strict, fireworks_solver=fw, local_llm=const_llm("Paris"))
     out = c.solve("t", "What is the capital of France?")
     assert out.tier == "fireworks"
     assert fw.called == 1
+
+
+def test_local_llm_accepted_with_permissive_threshold():
+    # With the new permissive threshold (0.65 < factual prior 0.70), local LLM is accepted.
+    fw = FakeFireworks()
+    c = Cascade(fireworks_solver=fw, local_llm=const_llm("Paris"))
+    out = c.solve("t", "What is the capital of France?")
+    assert out.tier == "local_llm"
+    assert out.total_tokens == 0
+    assert fw.called == 0
 
 
 def test_no_fireworks_returns_best_effort_local():

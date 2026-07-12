@@ -176,17 +176,16 @@ def test_spacy_ner_extracts_entities():
     assert any("2024" in d for d in data["date"])
 
 
-def test_ner_solver_disabled_for_baseline():
-    # Accuracy-first: NER is routed to Fireworks (format/nuance risk for the
-    # judge), so no local NER solver is registered.
+def test_ner_solver_enabled():
+    # NER solvers (spaCy + regex fallback) are now registered for zero-token answers.
     from src.categories import Category
     from src.local_solvers import solvers_for
 
-    assert solvers_for(Category.NER) == []
+    assert len(solvers_for(Category.NER)) >= 1
 
 
-def test_only_math_solver_registered():
-    # The math solver is the sole local (0-token) answer path in the baseline.
+def test_math_solver_registered():
+    # The math solver is the primary local (0-token) answer path.
     from src.categories import Category
     from src.local_solvers import MathSolver, solvers_for
 

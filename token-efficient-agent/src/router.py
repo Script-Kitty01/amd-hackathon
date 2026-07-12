@@ -40,28 +40,32 @@ _LOGIC_HINT = re.compile(
 _KEYWORDS: dict[Category, tuple[str, ...]] = {
     Category.SUMMARIZATION: (
         "summarise", "summarize", "summary", "one sentence", "tl;dr",
-        "condense", "in a sentence", "in brief",
+        "condense", "in a sentence", "in brief", "bullet point",
+        "in exactly", "in two sentences", "in three",
     ),
     Category.SENTIMENT: (
         "sentiment", "positive or negative", "tone", "emotion", "how do they feel",
+        "classify the sentiment", "what is the sentiment", "determine the sentiment",
+        "positive, negative", "customer review",
     ),
     Category.NER: (
         "named entit", "extract", "entities", "person, org", "recognition",
+        "extract all named", "identify people", "label each as",
+        "person, organization, location",
     ),
     Category.MATH: (
-        # Note: dropped bare "average"/"total" — too common in prose (e.g.
-        # "average O(1)"). "average of"/"mean of" (with numbers) are handled by
-        # the _MATH_SIGNAL regex below, which avoids that false positive.
         "calculate", "percent", "%", "how many", "how much",
         "sum of", "projection", "compute", "product of", "divided by",
-        # Word-problem cues (speed/rate/distance/finance) that carry numbers but
-        # no explicit operator keyword.
         "how fast", "how far", "how long", "speed", "per hour", "km/h", "mph",
         "interest", "rate of", "what is its", "on average",
+        "how many litres", "how many units", "total cost", "new price",
+        "final price", "what is the cost",
     ),
     Category.FACTUAL: (
         "explain", "what is", "what are", "who ", "how does", "how do",
         "why does", "why do", "define", "definition",
+        "what is the difference", "what is the main difference",
+        "name the", "briefly explain",
     ),
 }
 

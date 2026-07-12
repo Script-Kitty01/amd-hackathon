@@ -35,7 +35,7 @@ class FakeClient:
         self.responses = responses
         self.calls = []
 
-    def complete(self, model, system, user, max_tokens):
+    def complete(self, model, system, user, max_tokens, stop=None):
         self.calls.append(model)
         r = self.responses[model]
         if isinstance(r, Exception):
@@ -124,12 +124,13 @@ def test_truncated_but_valid_answer_is_kept():
 
 def test_empty_answer_still_escalates():
     # If the primary yields nothing usable, we still fall back to the next model.
+    # Uses gemma as primary (via MODEL_PREFERENCE=0) and minimax as escalation.
     client = FakeClient(
-        {"minimax-m3": ("", 10, "length"), "kimi-k2p7-code": ("Full answer.", 30)}
+        {"gemma-4-31b-it": ("", 10, "length"), "minimax-m3": ("Full answer.", 30)}
     )
-    solver = Solver(_cfg(["minimax-m3", "kimi-k2p7-code"]), client)
+    solver = Solver(_cfg(["gemma-4-31b-it", "minimax-m3"]), client)
     out = solver.solve("t7b", "Explain what recursion is.")
-    assert client.calls == ["minimax-m3", "kimi-k2p7-code"]
+    assert client.calls == ["gemma-4-31b-it", "minimax-m3"]
     assert out.answer == "Full answer."
     assert out.total_tokens == 40
 

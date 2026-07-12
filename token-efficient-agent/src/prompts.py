@@ -1,13 +1,18 @@
 """Per-category prompt templates and output budgets.
 
-This is the primary tuning surface. Each category maps to a terse system prompt
-and a hard max_tokens cap. Keep prompts minimal: every token here is paid on
-every call. Only add few-shot examples if a category provably fails without one.
+ACCURACY-FIRST: prompts are tuned to maximize judge pass rate. Each category
+has a system prompt that tells the model exactly what the judge expects, and a
+generous-enough max_tokens so answers never get truncated. Token savings come
+from model choice (Gemma = non-reasoning, dense tokenizer) not from starving
+the model of output space.
+
+Stop sequences are used to cut generation at the right point without truncation.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Optional
 
 from .categories import Category
 
@@ -16,70 +21,110 @@ from .categories import Category
 class PromptSpec:
     system: str
     max_tokens: int
+    stop: Optional[list[str]] = field(default=None)
 
 
-# ACCURACY-FIRST budgets. Caps are generous so answers are never truncated
-# before they're complete (a truncated answer fails the judge). max_tokens is a
-# ceiling, not a target — well-formed answers stop early, so lean answers still
-# cost few tokens. Tighten these only after the accuracy gate is comfortably
-# cleared. Prompts request exactly what each category's judge looks for
-# (e.g. sentiment must JUSTIFY the label; summaries must obey the constraint).
+# ACCURACY-FIRST budgets. These are generous so answers are never truncated.
+# The judge evaluates correctness + completeness, so we'd rather have a verbose
+# correct answer than a truncated one. Token savings come from Gemma-first
+# (non-reasoning, dense tokenizer) not from tight caps.
 TEMPLATES: dict[Category, PromptSpec] = {
     Category.FACTUAL: PromptSpec(
-        system=("Answer the question accurately and completely, explaining the "
-                "concept clearly in 2-4 sentences. No preamble."),
-        max_tokens=320,
+        system=(
+            "You are a knowledgeable assistant. Answer the question accurately "
+            "and completely in 2-4 sentences. Explain the concept clearly. "
+            "No preamble, no filler, just the answer."
+        ),
+        max_tokens=256,
+        stop=["\n\n\n"],
     ),
     Category.SENTIMENT: PromptSpec(
-        system=("Classify the sentiment as Positive, Negative, Neutral, or Mixed. "
-                "State the label first, then one sentence of justification. If the "
-                "text contains BOTH positive and negative aspects, use Mixed (or "
-                "Neutral) and your justification MUST mention both the positive and "
-                "the negative aspects."),
-        max_tokens=150,
+        system=(
+            "Classify the sentiment of the given text. Your response MUST follow "
+            "this exact format:\n"
+            "Label: <Positive|Negative|Neutral|Mixed>\n"
+            "Reason: <one sentence explaining why, mentioning specific evidence>\n\n"
+            "IMPORTANT RULES:\n"
+            "- If the text contains BOTH positive AND negative aspects, use 'Mixed' "
+            "and your reason MUST mention BOTH the positive and the negative aspects.\n"
+            "- If the text is purely positive, use 'Positive'.\n"
+            "- If the text is purely negative, use 'Negative'.\n"
+            "- If the text is neither, use 'Neutral'.\n"
+            "- Always cite specific words/phrases from the text as evidence."
+        ),
+        max_tokens=120,
     ),
     Category.SUMMARIZATION: PromptSpec(
-        system=("Summarise the text, obeying the EXACT length/format constraint "
-                "stated in the task — e.g. 'exactly two sentences', or 'exactly "
-                "three bullet points, each under 15 words'. Match the requested "
-                "count precisely. Output only the summary — no preamble."),
-        max_tokens=220,
+        system=(
+            "Summarize the text, obeying the EXACT length and format constraint "
+            "stated in the task. For example:\n"
+            "- 'in one sentence' = exactly 1 sentence\n"
+            "- 'in exactly two sentences' = exactly 2 sentences\n"
+            "- 'exactly three bullet points' = exactly 3 bullet points\n"
+            "- If a word limit is given, stay under it\n\n"
+            "Match the requested count PRECISELY. Output ONLY the summary. "
+            "No preamble, no 'Here is the summary:', just the summary itself."
+        ),
+        max_tokens=256,
     ),
     Category.NER: PromptSpec(
-        system=("Extract every named entity and label its type as PERSON, "
-                "ORGANIZATION, LOCATION, or DATE. Output ONLY compact JSON with "
-                'keys "person","organization","location","date", each a list of '
-                "the exact entity strings from the text (empty list if none)."),
-        max_tokens=320,
+        system=(
+            "Extract ALL named entities from the text and categorize each as "
+            "PERSON, ORGANIZATION, LOCATION, or DATE.\n\n"
+            "Output ONLY a JSON object with these exact keys: "
+            '"person", "organization", "location", "date" — each mapping to a '
+            "list of entity strings found in the text. Use empty lists [] for "
+            "categories with no entities.\n\n"
+            "Example output format:\n"
+            '{"person":["John Smith"],"organization":["Google"],'
+            '"location":["New York"],"date":["March 2023"]}\n\n'
+            "Be thorough — extract EVERY entity. Include full names and dates "
+            "exactly as they appear in the text."
+        ),
+        max_tokens=256,
     ),
-    # Reasoning categories: thinking models reason before answering, so the cap
-    # must fit the full chain PLUS the answer. finalize() extracts the final
-    # 'Answer:' line for math/logic, so verbose working doesn't hurt.
-    # Reasoning categories: thinking models emit a long chain BEFORE the answer,
-    # so the cap must fit the full chain plus the final line or the answer gets
-    # truncated (observed on hard puzzles). Generous caps; finalize() extracts the
-    # 'Answer:' line for math/logic so verbose working doesn't hurt. The prompt
-    # also asks the model to state the answer promptly to reduce runaway chains.
     Category.MATH: PromptSpec(
-        system=("Solve step by step but concisely, then end with 'Answer: "
-                "<value>' on its own line. State the final numeric value clearly."),
-        max_tokens=1536,
+        system=(
+            "Solve the math problem step by step. Show your work clearly but "
+            "concisely. After your working, you MUST end with a final line in "
+            "exactly this format:\n\n"
+            "Answer: <final numeric value>\n\n"
+            "The Answer line must contain ONLY the final number (with units or "
+            "currency symbol if appropriate). No extra text after it."
+        ),
+        max_tokens=768,
     ),
     Category.LOGIC: PromptSpec(
-        system=("Solve the puzzle so every stated constraint is satisfied. Reason "
-                "concisely through the constraints and, as soon as the solution is "
-                "determined, output it on its own line as 'Answer: <value>'."),
-        max_tokens=2048,
+        system=(
+            "Solve the logic puzzle or reasoning problem. Think through it "
+            "carefully, checking that every stated constraint is satisfied. "
+            "Show your reasoning concisely, then state your final answer on "
+            "its own line in exactly this format:\n\n"
+            "Answer: <value>\n\n"
+            "Make sure your answer satisfies ALL constraints in the problem."
+        ),
+        max_tokens=1024,
     ),
     Category.CODE_DEBUG: PromptSpec(
-        system=("Identify the bug, then provide the full corrected implementation "
-                "in a single code block. Keep any explanation to one short line."),
-        max_tokens=1280,
+        system=(
+            "You are a code debugging expert. Identify the bug in the code, "
+            "then provide the COMPLETE corrected implementation in a single "
+            "fenced code block. After the code block, add exactly one line "
+            "starting with 'Bug:' that names what was wrong.\n\n"
+            "Format:\n"
+            "```python\n<corrected code>\n```\n"
+            "Bug: <one-line description of the bug>"
+        ),
+        max_tokens=640,
     ),
     Category.CODE_GEN: PromptSpec(
-        system=("Write the requested function(s), correct and complete, in a "
-                "single code block. Include only what the spec asks for."),
-        max_tokens=1280,
+        system=(
+            "Write the requested function(s). Output ONLY the code in a single "
+            "fenced code block. The code must be correct, complete, and handle "
+            "edge cases. No prose, no examples, no explanation — just the code.\n\n"
+            "Format:\n```python\n<your code>\n```"
+        ),
+        max_tokens=640,
     ),
 }
 

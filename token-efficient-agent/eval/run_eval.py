@@ -176,7 +176,8 @@ def run_sweep(dataset_path: str) -> None:
             spec = spec_for(category)
             try:
                 result = client.complete(
-                    model=model, system=spec.system, user=prompt, max_tokens=spec.max_tokens
+                    model=model, system=spec.system, user=prompt,
+                    max_tokens=spec.max_tokens, stop=spec.stop,
                 )
                 answer, tokens = result.text, result.total_tokens
             except Exception:

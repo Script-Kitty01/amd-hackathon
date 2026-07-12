@@ -75,9 +75,16 @@ class FireworksClient:
         # then skip it. A 400 returns no usage, so this costs 0 tokens.
         self._no_extra_body: set[str] = set()
 
-    def complete(self, model: str, system: str, user: str, max_tokens: int) -> LLMResult:
+    def complete(
+        self,
+        model: str,
+        system: str,
+        user: str,
+        max_tokens: int,
+        stop: list[str] | None = None,
+    ) -> LLMResult:
         """Single deterministic chat completion. Retries transient/rate-limit errors."""
-        resp = self._create_with_retry(model, system, user, max_tokens)
+        resp = self._create_with_retry(model, system, user, max_tokens, stop)
         usage = resp.usage
         choice = resp.choices[0]
         # Some thinking models (kimi-k2p7-code) put the answer in `content` and
@@ -93,10 +100,12 @@ class FireworksClient:
             finish_reason=getattr(choice, "finish_reason", "") or "",
         )
 
-    def _create_once(self, model: str, system: str, user: str, max_tokens: int):
+    def _create_once(self, model: str, system: str, user: str, max_tokens: int, stop: list[str] | None = None):
         kwargs = {}
         if self._extra_body and model not in self._no_extra_body:
             kwargs["extra_body"] = self._extra_body
+        if stop:
+            kwargs["stop"] = stop
         # Merge the instruction into a single user turn instead of a separate
         # "system" role. Gemma-family models don't support a system role and can
         # mishandle it; a merged user message is accepted by every model
@@ -110,11 +119,11 @@ class FireworksClient:
             **kwargs,
         )
 
-    def _create_with_retry(self, model: str, system: str, user: str, max_tokens: int):
+    def _create_with_retry(self, model: str, system: str, user: str, max_tokens: int, stop: list[str] | None = None):
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES):
             try:
-                return self._create_once(model, system, user, max_tokens)
+                return self._create_once(model, system, user, max_tokens, stop)
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
                 # If the model rejects reasoning_effort, drop it and retry now
@@ -126,7 +135,7 @@ class FireworksClient:
                 ):
                     self._no_extra_body.add(model)
                     try:
-                        return self._create_once(model, system, user, max_tokens)
+                        return self._create_once(model, system, user, max_tokens, stop)
                     except Exception as exc2:  # noqa: BLE001
                         last_exc = exc2
                         exc = exc2

@@ -1,17 +1,13 @@
 """Per-task orchestration: route -> pick tier -> call -> escalate -> fallback.
 
-Tiered model selection (T6), grounded in the scoring rule that token cost is a
-raw count and NOT weighted by model size. The only token-relevant reasons to
-prefer a smaller model are one-shot success (a failed call still costs tokens,
-and a retry doubles them) and output concision. So the policy is:
+ACCURACY-FIRST strategy: use Gemma-31b (non-reasoning, dense tokenizer) as the
+primary model for ALL categories. Escalate to minimax-m3 (reasoning) or
+kimi-k2p7-code only when gemma fails or returns empty/invalid output.
 
-  - Predict the tier from route() up front. Easy, high-confidence tasks start on
-    the cheap preferred model; complex or ambiguous tasks go straight to the
-    strong model to avoid paying for a cheap call we expect to fail.
-  - Escalate to the strong model only when the primary call errors or returns
-    an empty answer.
-
-Guarantees a non-empty answer for every task so results.json is always valid.
+Escalation is more aggressive than before: if the primary answer fails
+validation or looks suspiciously short for reasoning tasks, we try the
+escalation model. A few extra tokens on the failure path is always worth it
+vs. failing the accuracy gate.
 """
 
 from __future__ import annotations
@@ -22,10 +18,10 @@ from typing import TYPE_CHECKING
 from .categories import Category, escalation_model, select_model
 from .compress import compress
 from .config import Config
-from .finalize import strip_reasoning
+from .finalize import finalize_answer
 from .prompts import spec_for
 from .router import route
-from .validate import is_valid
+from .validate import is_valid, needs_escalation
 
 if TYPE_CHECKING:
     from .fireworks_client import FireworksClient
@@ -43,45 +39,46 @@ _FALLBACK = "Unable to produce an answer."
 
 
 class Solver:
-    def __init__(self, cfg: Config, client: FireworksClient) -> None:
+    def __init__(self, cfg: Config, client: "FireworksClient") -> None:
         self._cfg = cfg
         self._client = client
 
     def _plan_attempts(self, category: Category, complexity: str, ambiguous: bool) -> list[str]:
         """Ordered models to try for one task.
 
-        Accuracy-first: the category-appropriate model goes first (Gemma for
-        language, MiniMax for reasoning, Kimi for code) — a SINGLE call in the
-        success case. The remaining allowed models follow as backstops so a task
-        never ends up empty just because one or two models errored, timed out,
-        or returned malformed output. Backstops cost extra tokens ONLY on the
-        failure path (a valid primary answer returns immediately); on the
-        accuracy gate that trade is always worth it. The strongest general
-        fallback is ordered ahead of near-duplicates of the primary.
+        Primary: Gemma-31b (non-reasoning, terse, dense tokenizer).
+        Escalation: minimax-m3 (reasoning) or kimi (code) when primary fails.
+        Third backstop: try the other strong model if both above fail.
         """
         models = self._cfg.models
         primary = select_model(category, models)
         strong = escalation_model(models)
 
-        # Primary + ONE strong fallback. Two attempts is the accuracy-vs-latency
-        # sweet spot: it recovers from a single failed/empty call without turning
-        # a slow task into 5 sequential remote calls, which on the 2-vCPU / 10-min
-        # grading box would risk timing out and leaving later tasks empty.
         attempts = [primary]
         if strong != primary:
             attempts.append(strong)
+        # Add a third backstop for hard categories: try kimi for code, minimax for reasoning
+        if category in (Category.CODE_DEBUG, Category.CODE_GEN):
+            for m in models:
+                if "kimi" in m.lower() and m not in attempts:
+                    attempts.append(m)
+                    break
+        elif category in (Category.MATH, Category.LOGIC):
+            for m in models:
+                if "minimax" in m.lower() and m not in attempts:
+                    attempts.append(m)
+                    break
         return attempts
 
     def solve(self, task_id: str, prompt: str) -> SolveOutcome:
         r = route(prompt)
         spec = spec_for(r.category)
         attempts = self._plan_attempts(r.category, r.complexity, r.ambiguous)
-        # Compress the prompt for the remote call only (routing/caching used the
-        # original). Meaning-preserving; saves input tokens on every call.
+        # Compress the prompt for the remote call only (routing used the original).
         user = compress(prompt)
 
         total_tokens = 0
-        last_text = ""  # best non-empty answer seen, used if all attempts fail validation
+        last_text = ""  # best non-empty answer seen
         for model in attempts:
             try:
                 result = self._client.complete(
@@ -89,21 +86,22 @@ class Solver:
                     system=spec.system,
                     user=user,
                     max_tokens=spec.max_tokens,
+                    stop=spec.stop,
                 )
             except Exception:
-                continue  # try the next tier
+                continue  # try the next model
             total_tokens += result.total_tokens
-            # Strip reasoning traces before validating/shipping so a thinking
-            # model's <think> block never reaches the judge.
-            text = strip_reasoning(result.text)
-            # Ship the first valid, non-empty answer. We do NOT force escalation
-            # on finish_reason=="length": with a thinking model the reasoning is
-            # what filled the budget, and after stripping it the visible answer is
-            # usually complete. A second slow call rarely helps and risks the
-            # wall-clock cap. Escalate only when there's no usable answer at all.
+            # Finalize: strip reasoning traces, extract answer lines, compact NER
+            text = finalize_answer(r.category, result.text)
+
+            # Accept the first valid answer that doesn't need escalation
             if text and is_valid(r.category, text):
-                return SolveOutcome(task_id, text, r.category, total_tokens)
-            if text:
-                last_text = text  # keep as fallback; escalate for a cleaner one
+                if not needs_escalation(r.category, text):
+                    return SolveOutcome(task_id, text, r.category, total_tokens)
+                # Answer is structurally valid but weak — keep it, try escalation
+                if not last_text or len(text) > len(last_text):
+                    last_text = text
+            elif text:
+                last_text = text  # keep as fallback
 
         return SolveOutcome(task_id, last_text or _FALLBACK, r.category, total_tokens)

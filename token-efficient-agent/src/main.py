@@ -39,18 +39,21 @@ _FALLBACK = "Unable to produce an answer."
 
 
 def _build_cascade() -> Cascade | None:
-    """Construct the solving cascade, or None if config is unavailable.
+    """Construct the solving cascade, or None if NOTHING is available.
 
-    A missing/invalid config must NOT crash the run: we still emit a complete
-    results file (all fallback answers) and exit cleanly.
+    Even without Fireworks credentials, the cascade can still answer tasks
+    using local solvers (deterministic math, NER) and the local LLM (if present).
+    Only return None if even the local solvers can't be initialized.
     """
+    fireworks_solver = None
     try:
         cfg = load_config()
-    except Exception:
-        return None
-    try:
         load_model_preference()  # overlay launch-day sweep output if present
         fireworks_solver = Solver(cfg, FireworksClient(cfg))
+    except Exception:
+        pass  # No Fireworks configured — local solvers only
+
+    try:
         return Cascade(
             thresholds=load_thresholds(),
             fireworks_solver=fireworks_solver,

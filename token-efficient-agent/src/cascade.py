@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .categories import Category
-from .finalize import finalize
+from .finalize import finalize_answer
 from .local_llm import LocalLLM
 from .local_solvers import Solution, solvers_for
 from .router import route
@@ -86,7 +86,7 @@ class Cascade:
                 continue
             best = _better(best, sol)
             if sol.confidence >= self._thr.local_solver(cat):
-                return CascadeOutcome(task_id, finalize(cat, sol.answer), cat, 0, "local_solver")
+                return CascadeOutcome(task_id, finalize_answer(cat, sol.answer), cat, 0, "local_solver")
 
         # Tier 2: local LLM.
         if self._local_llm is not None:
@@ -94,14 +94,14 @@ class Cascade:
             if sol is not None:
                 best = _better(best, sol)
                 if sol.confidence >= self._thr.local_llm(cat):
-                    return CascadeOutcome(task_id, finalize(cat, sol.answer), cat, 0, "local_llm")
+                    return CascadeOutcome(task_id, finalize_answer(cat, sol.answer), cat, 0, "local_llm")
 
         # Tier 3: Fireworks fallback (paid).
         if self._fireworks is not None:
             out = self._fireworks.solve(task_id, prompt)
             answer = out.answer or (best.answer if best else _FALLBACK)
             return CascadeOutcome(
-                task_id, finalize(out.category, answer), out.category, out.total_tokens, "fireworks"
+                task_id, finalize_answer(out.category, answer), out.category, out.total_tokens, "fireworks"
             )
 
         # No Fireworks configured: return the best local answer we have.
