@@ -74,6 +74,33 @@ def _numbers(s: str) -> list[float]:
     return [float(x.replace(",", "")) for x in _NUM_RE.findall(s)]
 
 
+def _all_numbers_consumed(prompt: str, consumed: set[float]) -> bool:
+    """Safety: all significant standalone numbers in the prompt must have been used.
+
+    We use a simple heuristic: find all numbers that:
+    - are NOT preceded by a letter (excludes Q1, Q2, Q3, etc.)
+    - are NOT part of an ordinal (1st, 2nd, 3rd) 
+    Then check each is in the consumed set.
+    """
+    # Match numbers not immediately preceded by a letter (Q1, 3rd -> excluded)
+    for m in re.finditer(r"(?<![A-Za-z])(\d[\d,]*(?:\.\d+)?)", prompt):
+        raw = m.group(1)
+        # Skip ordinals: followed by st/nd/rd/th
+        after = prompt[m.end():m.end()+2]
+        if re.match(r"(?:st|nd|rd|th)\b", after, re.I):
+            continue
+        try:
+            n = float(raw.replace(",", ""))
+            if n <= 0:
+                continue
+            # Must appear in consumed (within rounding)
+            if not any(abs(n - c) < 1e-6 for c in consumed):
+                return False
+        except ValueError:
+            continue
+    return True
+
+
 def _apply_op(a: float, op: str, b: float) -> Optional[float]:
     op = op.lower()
     if op == "plus":
@@ -184,6 +211,183 @@ class MathSolver:
                 return Solution(_fmt(float(value), "$" in p), confidence=0.9)
 
         return None  # abstain -> escalate
+
+
+# --- Family 2: operation-chain solver (warehouse-style multi-step) ---------
+# Handles: "starts with X, sells N%, restocks M, sells K → final"
+# Safety: all numeric quantities in the prompt must be consumed.
+
+_STARTS_RE = re.compile(
+    r"(?:starts?\s+with|begins?\s+with|initially\s+has?|has?\s+an?\s+initial)"
+    r"\s+(?:\$\s*)?(\d[\d,]*(?:\.\d+)?)\s*(?:units?|items?|pieces?)?",
+    re.I,
+)
+_OP_RE = re.compile(
+    r"(?:"
+    # percentage decrease: sells/loses/uses/decreases N%
+    r"(?:sells?|loses?|uses?|decreases?\s+by|removes?|ships?)\s+"
+    r"(?P<pct_dec_val>\d+(?:\.\d+)?)\s*%"
+    r"|"
+    # percentage increase: grows/increases by N%
+    r"(?:grows?\s+by|increases?\s+by)\s*(?P<pct_inc_val>\d+(?:\.\d+)?)\s*%"
+    r"|"
+    # fixed addition: restocks/receives/adds N
+    r"(?:restocks?|receives?|adds?|gains?|acquires?)\s+(?P<add_val>\d[\d,]*(?:\.\d+)?)"
+    r"(?:\s+(?:units?|items?|pieces?))?"
+    r"|"
+    # fixed subtraction: sells/removes/uses/ships N (exact number, not percentage)
+    r"(?:sells?|removes?|uses?|ships?|loses?)\s+(?P<sub_val>\d[\d,]*(?:\.\d+)?)"
+    r"(?:\s+(?:units?|items?|pieces?))?"
+    r")",
+    re.I,
+)
+
+
+class OperationChainSolver:
+    """Solves multi-step inventory/state problems: start → ops → final value.
+
+    Safety rule: every significant number in the prompt must be consumed in the
+    calculation. If any number is leftover the problem is beyond this solver.
+    """
+
+    category = Category.MATH
+
+    def try_solve(self, prompt: str) -> Optional[Solution]:
+        p = prompt.strip()
+
+        start_m = _STARTS_RE.search(p)
+        if not start_m:
+            return None  # no starting value → not this family
+
+        try:
+            value = _num(start_m.group(1))
+        except ValueError:
+            return None
+
+        consumed: set[float] = {value}
+        ops = list(_OP_RE.finditer(p))
+        if not ops:
+            return None
+
+        for m in ops:
+            try:
+                if m.group("pct_dec_val"):
+                    pct = float(m.group("pct_dec_val"))
+                    consumed.add(pct)
+                    value *= (1 - pct / 100.0)
+                elif m.group("pct_inc_val"):
+                    pct = float(m.group("pct_inc_val"))
+                    consumed.add(pct)
+                    value *= (1 + pct / 100.0)
+                elif m.group("add_val"):
+                    n = _num(m.group("add_val"))
+                    consumed.add(n)
+                    value += n
+                elif m.group("sub_val"):
+                    n = _num(m.group("sub_val"))
+                    consumed.add(n)
+                    value -= n
+            except (ValueError, IndexError):
+                return None
+
+        if not _all_numbers_consumed(p, consumed):
+            return None  # some number wasn't used → problem too complex, abstain
+
+        currency = "$" in p
+        answer = _fmt(round(value, 2), currency)
+        return Solution(answer, confidence=0.93)
+
+
+# --- Family 3: ratio/proportion + cost (recipe-style) ----------------------
+# Handles: "X [unit] for A → how much for B? costs $P per [unit] → total cost?"
+
+_RATIO_RE = re.compile(
+    r"(\d+(?:/\d+)?(?:\.\d+)?)\s+"
+    r"(?:cups?|kg|g|oz|lb|lbs?|liters?|litres?|ml|tbsp|tsp|units?|items?|pieces?|servings?)?"
+    r"\s+(?:of\s+\S+\s+)?(?:for|to\s+make|makes?)\s+(\d[\d,]*(?:\.\d+)?)"
+    r"\s*(?:cookies?|servings?|portions?|people|units?|items?|pieces?)?",
+    re.I,
+)
+_SCALE_RE = re.compile(
+    r"(?:how\s+much\s+\S+\s+(?:is\s+)?(?:needed|required)\s+for|"
+    r"(?:needed?|required?)\s+for)\s+(\d[\d,]*(?:\.\d+)?)"
+    r"\s*(?:cookies?|servings?|portions?|people|units?|items?|pieces?)?",
+    re.I,
+)
+_COST_RE = re.compile(
+    r"(?:costs?|price(?:d)?|at)\s+\$\s*(\d+(?:\.\d+)?)"
+    r"(?:\s+per\s+(?:cup|kg|g|oz|lb|unit|item|piece|serving))?",
+    re.I,
+)
+
+
+def _parse_fraction(s: str) -> float:
+    """Parse "3/4" or "1.5" as a float."""
+    if "/" in s:
+        num, den = s.split("/", 1)
+        return float(num.strip()) / float(den.strip())
+    return float(s)
+
+
+class RatioSolver:
+    """Solves proportion + optional cost problems.
+
+    Example: "3/4 cup for 12 cookies; how much for 30? costs $2.40/cup"
+    """
+
+    category = Category.MATH
+
+    def try_solve(self, prompt: str) -> Optional[Solution]:
+        p = prompt.strip()
+
+        ratio_m = _RATIO_RE.search(p)
+        scale_m = _SCALE_RE.search(p)
+        if not ratio_m or not scale_m:
+            return None
+
+        try:
+            base_qty = _parse_fraction(ratio_m.group(1))
+            base_count = _num(ratio_m.group(2))
+            target_count = _num(scale_m.group(1))
+        except (ValueError, ZeroDivisionError):
+            return None
+
+        if base_count == 0:
+            return None
+
+        scaled = base_qty * target_count / base_count
+        # Add fraction components to consumed so "3/4" accounts for 3 and 4
+        consumed = {base_qty, base_count, target_count}
+        if "/" in ratio_m.group(1):
+            parts = ratio_m.group(1).split("/")
+            try:
+                consumed.add(float(parts[0].strip()))
+                consumed.add(float(parts[1].strip()))
+            except ValueError:
+                pass
+
+        cost_m = _COST_RE.search(p)
+        if cost_m:
+            try:
+                price = float(cost_m.group(1))
+                consumed.add(price)
+                total_cost = scaled * price
+                if not _all_numbers_consumed(p, consumed):
+                    return None
+                # Format both answers
+                scaled_fmt = f"{scaled:g}" if scaled != int(scaled) else str(int(scaled))
+                answer = (
+                    f"{scaled_fmt} {'cup' if 'cup' in p.lower() else 'units'}; "
+                    f"${total_cost:.2f}"
+                )
+                return Solution(answer, confidence=0.92)
+            except ValueError:
+                return None
+
+        if not _all_numbers_consumed(p, consumed):
+            return None
+        scaled_fmt = f"{scaled:g}" if scaled != int(scaled) else str(int(scaled))
+        return Solution(scaled_fmt, confidence=0.88)
 
 
 # --- sentiment solver (T22) -----------------------------------------------
@@ -409,13 +613,18 @@ class SpacyNERSolver:
 
 # --- registry --------------------------------------------------------------
 
-# Accuracy-first: enable MATH solver (deterministic, high precision) and
-# regex-based NER solver (no dependencies, decent precision for clear entities).
-# SpaCy NER is available but not registered since spaCy isn't in requirements
-# to keep the image lean. The regex NER is good enough as a 0-token tier.
+# Registry: only solvers that are PROVEN safe for the accuracy gate.
+# Safety rule for all local solvers: abstain on anything uncertain.
+# A wrong local answer costs the same tokens as a correct one (zero) but
+# risks the accuracy gate — the one thing we cannot recover from.
 _SOLVERS: dict[Category, list[LocalSolver]] = {
-    Category.MATH: [MathSolver()],
-    Category.NER: [NERSolver()],
+    # Math: deterministic single-step + multi-step operation chains + ratio/cost.
+    # All three abstain when any number in the prompt is unconsumed.
+    Category.MATH: [MathSolver(), OperationChainSolver(), RatioSolver()],
+    # Sentiment: clear one-sided signals only. Abstains on any contrastive text
+    # ("but", "however", "although") and on mixed pos/neg signals.
+    # The judge's mixed-review tasks always have contrastive language → Fireworks.
+    Category.SENTIMENT: [SentimentSolver()],
 }
 
 

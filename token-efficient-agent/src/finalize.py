@@ -1,16 +1,15 @@
 """Local answer finalization: normalize output on the free local side.
 
-IMPORTANT: local post-processing does NOT reduce the token score — the judging
-proxy counts tokens on the Fireworks API call, so anything we trim afterward is
-free. finalize() therefore optimizes for CORRECTNESS/readability only.
+Post-processing costs zero tokens (runs after the API call).
 
 What it does:
-  - strip reasoning traces (<think>...</think> and friends)
-  - Math/Logic: extract the "Answer: <value>" line so the judge sees a clean answer
-  - NER: compact any embedded JSON object into the expected shape
-  - Code: preserve code blocks intact
-  - Sentiment: ensure the label is clearly visible
-  - Everything else: return cleaned text intact
+  1. Strip tagged reasoning blocks (<think>, <mm:think>, <|think|>)
+  2. Strip UNTAGGED prose reasoning spill (Gemma-style "Let me think..." leakage)
+     using a score-based detector: strip when confident it's reasoning, not answer
+  3. Extract clean Answer: line for math/logic
+  4. Compact NER JSON
+  5. Strip Answer:/Final answer: prefixes, outer quotes, trailing periods on
+     short answers, normalize whitespace
 """
 
 from __future__ import annotations
@@ -20,7 +19,10 @@ import re
 
 from .categories import Category
 
-# Reasoning/thinking blocks emitted by "thinking" models.
+# ── 1. Tagged reasoning blocks ──────────────────────────────────────────────
+# Covers: <think>, <thinking>, <reasoning>, <thought>, <scratchpad> (standard)
+#         <mm:think> (MiniMax M3)
+#         <|think|> (Gemma 4)
 _THINK_BLOCK = re.compile(
     r"<\s*(think|thinking|reasoning|thought|scratchpad)\s*>.*?<\s*/\s*\1\s*>|"
     r"<mm:think>.*?</mm:think>|"
@@ -46,15 +48,9 @@ _DANGLING_OPEN = re.compile(
     re.I | re.S,
 )
 
-# Pattern for "Answer: <value>" lines (math/logic)
-_ANSWER_LINE = re.compile(
-    r"^\s*(?:answer|final\s+answer)\s*[:=]\s*(.+)",
-    re.MULTILINE | re.IGNORECASE,
-)
-
 
 def strip_reasoning(text: str) -> str:
-    """Remove <think>-style reasoning traces, leaving the actual answer."""
+    """Remove tagged <think>-style reasoning traces."""
     text = _THINK_BLOCK.sub("", text)
     if _CLOSE_TAG.search(text):
         text = _DANGLING_CLOSE.sub("", text, count=1)
@@ -63,69 +59,144 @@ def strip_reasoning(text: str) -> str:
     return text.strip()
 
 
-def _extract_math_answer(text: str) -> str:
-    """For math/logic: extract the Answer: line if present, else return full text.
-    
-    The judge evaluates the FINAL answer, so we extract it cleanly. If no
-    explicit answer line, return the full working (judge can handle it).
+# ── 2. Untagged prose reasoning spill (Gemma-style) ────────────────────────
+# Score-based: require ≥3 to strip, not just any single cue. This avoids
+# falsely stripping valid answers like "Let me explain..." or "First, ...".
+
+_SPILL_CUES = [
+    # Score-2 cues: very strong signal this is meta-reasoning, not the answer
+    (2, re.compile(r"^the user (?:wants|is asking|needs)", re.I)),
+    (2, re.compile(r"^we need (?:to|answer)", re.I)),
+    (2, re.compile(r"^let me (?:think|analyze|consider|work)", re.I)),
+    (2, re.compile(r"^thought\s*\n", re.I)),
+    # Score-1 cues: weaker signal, need combination
+    (1, re.compile(r"^(?:let's|let us) (?:solve|work|figure|analyze|think)", re.I)),
+    (1, re.compile(r"^to solve this", re.I)),
+    (1, re.compile(r"^first,?\s+(?:i need|we need|let's|let me)", re.I)),
+    (1, re.compile(r"^(?:looking at|analyzing) (?:this|the)", re.I)),
+]
+
+
+def _prose_spill_score(text: str) -> int:
+    """Return a spill score for the first meaningful line of text."""
+    first_line = text.lstrip().split("\n")[0].strip()
+    score = 0
+    for weight, pattern in _SPILL_CUES:
+        if pattern.match(first_line):
+            score += weight
+    return score
+
+
+def strip_prose_spill(text: str, category: Category) -> str:
+    """Strip untagged reasoning spill from the beginning of the answer.
+
+    Only strips when score >= 3. After stripping, returns what remains — if
+    nothing useful remains, returns the original (don't make it worse).
+    For reasoning categories (math/logic) we WANT the working, so skip.
     """
-    # Look for the LAST "Answer:" line (models sometimes have intermediate answers)
-    matches = _ANSWER_LINE.findall(text)
-    if matches:
-        answer = matches[-1].strip()
-        # Clean up common suffixes models add after the answer
-        answer = re.sub(r"\s*[\.\,]?\s*$", "", answer)
-        return answer
+    if category in (Category.MATH, Category.LOGIC):
+        return text  # reasoning categories want visible working
+    if _prose_spill_score(text) < 3:
+        return text
+    # Find the first line that looks like real answer content
+    lines = text.split("\n")
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Re-score from this line — if it still looks like spill, keep going
+        remaining = "\n".join(lines[i:])
+        if _prose_spill_score(remaining) < 3:
+            result = remaining.strip()
+            return result if result else text
     return text
 
 
+# ── 3. Math/Logic answer extraction ────────────────────────────────────────
+_ANSWER_LINE = re.compile(
+    r"^\s*(?:\*{0,2})(?:final\s+)?answer\s*(?:\*{0,2})\s*[:=]\s*(.+)",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def _extract_math_answer(text: str) -> str:
+    """Extract the last Answer: <value> line if present."""
+    matches = _ANSWER_LINE.findall(text)
+    if matches:
+        answer = matches[-1].strip().strip("*`").rstrip(".")
+        # Remove trailing sentence if it snuck past (e.g. "1672 units")
+        # Keep currency/units that are part of the answer
+        return answer
+    # No explicit Answer: line — return last non-empty line
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    return lines[-1] if lines else text
+
+
+# ── 4. NER JSON compaction ──────────────────────────────────────────────────
+_KEY_MAP = {
+    "org": "organization", "orgs": "organization",
+    "organizations": "organization", "organisation": "organization",
+    "organisations": "organization",
+    "persons": "person", "people": "person",
+    "locations": "location", "loc": "location",
+    "place": "location", "places": "location", "gpe": "location",
+    "dates": "date", "time": "date",
+}
+
+
 def _compact_ner(text: str) -> str:
-    """Extract and compact NER JSON output."""
-    # Try to find a JSON object in the text
     try:
         start = text.index("{")
         end = text.rindex("}") + 1
         obj = json.loads(text[start:end])
         if isinstance(obj, dict):
-            # Normalize keys to lowercase
-            normalized = {}
+            normalized: dict[str, list] = {}
             for k, v in obj.items():
-                key = k.lower().strip()
-                # Map common variants
-                if key in ("org", "orgs", "organizations", "organisation", "organisations"):
-                    key = "organization"
-                elif key in ("persons", "people"):
-                    key = "person"
-                elif key in ("locations", "loc", "place", "places", "gpe"):
-                    key = "location"
-                elif key in ("dates", "time"):
-                    key = "date"
-                normalized[key] = v if isinstance(v, list) else [v]
+                key = _KEY_MAP.get(k.lower().strip(), k.lower().strip())
+                normalized[key] = v if isinstance(v, list) else [str(v)]
             return json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
     except (ValueError, json.JSONDecodeError):
         pass
     return text
 
 
-def _clean_code(text: str) -> str:
-    """Preserve code blocks, strip any surrounding prose."""
-    # If there's a fenced code block, extract it
-    fence_match = re.search(r"```(?:\w*)\n?(.*?)```", text, re.S)
-    if fence_match:
-        code = fence_match.group(1).strip()
-        # Also include any "Bug:" line after the fence
-        bug_match = re.search(r"```\s*\n*(Bug:.*?)$", text, re.MULTILINE)
-        if bug_match:
-            return f"```python\n{code}\n```\n{bug_match.group(1)}"
-        return f"```python\n{code}\n```"
+# ── 5. General answer cleaning ──────────────────────────────────────────────
+_ANSWER_PREFIX = re.compile(
+    r"^\s*(?:answer|final\s+answer|final|output|result|response)\s*[:=]\s*",
+    re.IGNORECASE,
+)
+_SHORT_TRAILING_PERIOD = re.compile(r"\.\s*$")
+
+
+def _clean_general(text: str) -> str:
+    """Strip common wrapper noise that adds no information."""
+    # Strip "Answer: " prefix the model emits before its answer
+    text = _ANSWER_PREFIX.sub("", text, count=1).strip()
+    # Strip outer quotes on short single-line answers
+    if "\n" not in text and len(text) < 120:
+        if len(text) >= 2 and text[0] == text[-1] and text[0] in ('"', "'", "`"):
+            text = text[1:-1].strip()
+    # Strip trailing period on short answers (≤8 words) — "Paris." → "Paris"
+    word_count = len(text.split())
+    if word_count <= 8 and text.endswith("."):
+        text = text[:-1].strip()
+    # Normalize unicode spaces and excess whitespace
+    text = text.replace("\u00a0", " ").replace("\u2009", " ")
+    text = re.sub(r"[ \t]+", " ", text).strip()
     return text
 
 
-def finalize_answer(category: Category, answer: str) -> str:
-    """Finalize an answer for submission: strip reasoning, extract clean output."""
+# ── Public API ──────────────────────────────────────────────────────────────
+
+def finalize(category: Category, answer: str) -> str:
+    """Full finalization pipeline. Free — runs after the API call."""
     text = strip_reasoning((answer or "").strip())
     if not text:
         return text
+
+    text = strip_prose_spill(text, category)
+    if not text:
+        return answer.strip()  # fallback to original if we stripped too much
 
     if category in (Category.MATH, Category.LOGIC):
         return _extract_math_answer(text)
@@ -133,8 +204,9 @@ def finalize_answer(category: Category, answer: str) -> str:
     if category == Category.NER:
         return _compact_ner(text)
 
+    # Code: preserve as-is (fenced blocks must stay intact)
     if category in (Category.CODE_DEBUG, Category.CODE_GEN):
-        return _clean_code(text)
+        return text
 
-    # Sentiment, Factual, Summarization: return cleaned text intact
-    return text
+    # Prose categories: general cleaning
+    return _clean_general(text)

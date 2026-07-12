@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from .categories import Category, escalation_model, select_model
 from .compress import compress
 from .config import Config
-from .finalize import finalize_answer
+from .finalize import finalize
 from .prompts import spec_for
 from .router import route
 from .validate import is_valid, needs_escalation
@@ -87,12 +87,12 @@ class Solver:
                     user=user,
                     max_tokens=spec.max_tokens,
                     stop=spec.stop,
+                    needs_reasoning=spec.needs_reasoning,
                 )
             except Exception:
                 continue  # try the next model
             total_tokens += result.total_tokens
-            # Finalize: strip reasoning traces, extract answer lines, compact NER
-            text = finalize_answer(r.category, result.text)
+            text = finalize(r.category, result.text)
 
             # Accept the first valid answer that doesn't need escalation
             if text and is_valid(r.category, text):

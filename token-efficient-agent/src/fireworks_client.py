@@ -82,15 +82,12 @@ class FireworksClient:
         user: str,
         max_tokens: int,
         stop: list[str] | None = None,
+        needs_reasoning: bool = False,
     ) -> LLMResult:
         """Single deterministic chat completion. Retries transient/rate-limit errors."""
-        resp = self._create_with_retry(model, system, user, max_tokens, stop)
+        resp = self._create_with_retry(model, system, user, max_tokens, stop, needs_reasoning)
         usage = resp.usage
         choice = resp.choices[0]
-        # Some thinking models (kimi-k2p7-code) put the answer in `content` and
-        # reasoning in a separate field. Others (minimax-m3 via vLLM) may leak
-        # reasoning tags directly into `content`. We read content only — the
-        # caller's strip_reasoning handles any leaked tags.
         text = (choice.message.content or "").strip()
         return LLMResult(
             text=text,
@@ -100,16 +97,24 @@ class FireworksClient:
             finish_reason=getattr(choice, "finish_reason", "") or "",
         )
 
-    def _create_once(self, model: str, system: str, user: str, max_tokens: int, stop: list[str] | None = None):
-        kwargs = {}
-        if self._extra_body and model not in self._no_extra_body:
-            kwargs["extra_body"] = self._extra_body
+    def _create_once(self, model: str, system: str, user: str, max_tokens: int,
+                     stop: list[str] | None = None, needs_reasoning: bool = False):
+        kwargs: dict = {}
+        # Build per-call reasoning_effort:
+        # - Non-reasoning categories on any model: suppress thinking (=none).
+        # - Reasoning categories (math/logic): use global config or default.
+        # Gemma models benefit most from reasoning=none (they can silently enter
+        # <|think|> mode). Minimax/kimi are reasoning models — suppress only when
+        # the category genuinely doesn't need step-by-step thinking.
+        if model not in self._no_extra_body:
+            if not needs_reasoning:
+                # Force non-reasoning for cheap categories on all models.
+                kwargs["extra_body"] = {"reasoning_effort": "none"}
+            elif self._extra_body:
+                # Use global config (e.g. FIREWORKS_REASONING_EFFORT) for reasoning cats.
+                kwargs["extra_body"] = self._extra_body
         if stop:
             kwargs["stop"] = stop
-        # Merge the instruction into a single user turn instead of a separate
-        # "system" role. Gemma-family models don't support a system role and can
-        # mishandle it; a merged user message is accepted by every model
-        # (minimax/kimi/gemma alike). This is the same approach the local LLM uses.
         content = f"{system}\n\n{user}" if system else user
         return self._client.chat.completions.create(
             model=model,
@@ -119,23 +124,19 @@ class FireworksClient:
             **kwargs,
         )
 
-    def _create_with_retry(self, model: str, system: str, user: str, max_tokens: int, stop: list[str] | None = None):
+    def _create_with_retry(self, model: str, system: str, user: str, max_tokens: int,
+                           stop: list[str] | None = None, needs_reasoning: bool = False):
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES):
             try:
-                return self._create_once(model, system, user, max_tokens, stop)
+                return self._create_once(model, system, user, max_tokens, stop, needs_reasoning)
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
-                # If the model rejects reasoning_effort, drop it and retry now
-                # (doesn't consume a retry attempt; 400 costs 0 tokens).
-                if (
-                    self._extra_body
-                    and model not in self._no_extra_body
-                    and _is_reasoning_param_error(exc)
-                ):
+                # If the model rejects reasoning_effort, drop it and retry now.
+                if model not in self._no_extra_body and _is_reasoning_param_error(exc):
                     self._no_extra_body.add(model)
                     try:
-                        return self._create_once(model, system, user, max_tokens, stop)
+                        return self._create_once(model, system, user, max_tokens, stop, needs_reasoning)
                     except Exception as exc2:  # noqa: BLE001
                         last_exc = exc2
                         exc = exc2

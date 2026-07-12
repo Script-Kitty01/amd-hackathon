@@ -1,6 +1,28 @@
 # Execution Plan — Token-Efficient Agent (Track 1)
 
-Single source of truth for architecture, milestones, and trackable subtasks.
+Single source of truth for architecture, milestones, and current state.
+
+> **STATUS (2026-07-12): ON THE LEADERBOARD at 84.2% / 11,339 tokens.**
+> Current focus: reduce token count toward 4k without dropping below 84% accuracy.
+>
+> **Architecture:** Two-tier: deterministic local solvers (0 tokens) + Fireworks.
+> No bundled local LLM (dropped — can't validate on 4 GB grading box).
+>
+> **Token reduction plan (mentor + Bastion research):**
+>
+> 1. ✅ Compact system prompts (~20 tokens each vs ~80-100 before)
+> 2. ✅ `reasoning_effort=none` per call for non-reasoning categories (factual/sentiment/NER/summarization)
+> 3. ✅ Prose reasoning spill detection (Gemma emits "Let me think..." without tags)
+> 4. ✅ Registered SentimentSolver (clear one-sided → 0 tokens)
+> 5. ✅ OperationChainSolver (warehouse-style multi-step math → 0 tokens)
+> 6. ✅ RatioSolver (recipe proportion+cost → 0 tokens)
+> 7. ✅ Better answer cleaning (strip Answer: prefixes, outer quotes, trailing periods)
+> 8. ✅ Tight max_tokens caps (math: 256, logic: 384, sentiment: 80, etc.)
+>
+> **Projected savings:** ~2,000-4,000 tokens → target ~7,000-9,000 tokens on next submission.
+> Path to 4k requires local solvers to catch most math (2-3 tasks free) + one-call per task.
+>
+> **See:** `docs/POST-GATE-TOKEN-OPTIMIZATION.md` for post-gate tactics.
 
 > **Strategy pivot (2026-07-09):** LabLab Admin confirmed a task's final answer
 > **may be produced by a local model**; the goal is to use local models to

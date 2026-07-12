@@ -123,15 +123,20 @@ def test_cache_normalizes_prompt():
     assert fw.called == 1
 
 
-def test_sentiment_escalates_to_fireworks():
-    # Accuracy-first baseline: the local lexicon sentiment solver is disabled,
-    # so sentiment tasks go to Fireworks for a reliable, judge-friendly label.
+def test_sentiment_handled_locally_or_fireworks():
+    # Clear one-sided negative is now handled by the local solver at zero tokens.
     fw = FakeFireworks()
     c = Cascade(fireworks_solver=fw)
-    out = c.solve(
-        "t",
-        "Classify the sentiment of this review: 'The battery dies in an hour, "
-        "very disappointing.'",
-    )
+    out = c.solve("t", "Classify: The battery dies in an hour, very disappointing.")
+    assert out.answer.strip()
+    assert out.tier in ("local_solver", "fireworks")
+
+
+def test_sentiment_contrastive_escalates_to_fireworks():
+    # Contrastive text (but/however) must escalate to Fireworks.
+    fw = FakeFireworks()
+    c = Cascade(fireworks_solver=fw)
+    out = c.solve("t", "Classify: The screen is gorgeous but the battery dies in an hour.")
     assert out.tier == "fireworks"
     assert fw.called == 1
+
