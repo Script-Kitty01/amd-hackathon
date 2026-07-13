@@ -1,71 +1,71 @@
-"""Per-category prompt templates and output budgets.
-
-This is the primary tuning surface. Each category maps to a terse system prompt
-and a hard max_tokens cap. Keep prompts minimal: every token here is paid on
-every call. Only add few-shot examples if a category provably fails without one.
-"""
-
-from __future__ import annotations
-
+﻿from enum import Enum
 from dataclasses import dataclass
-
 from .categories import Category
 
-
-@dataclass(frozen=True)
+@dataclass
 class PromptSpec:
     system: str
     max_tokens: int
-
+    stop: list[str] | None = None
 
 TEMPLATES: dict[Category, PromptSpec] = {
-    # Non-reasoning categories: push for the shortest correct output.
     Category.FACTUAL: PromptSpec(
-        system=("Answer in at most 3 short sentences. No preamble, no filler, "
-                "do not restate the question."),
-        max_tokens=130,
+        system="Answer the question accurately in 2-4 sentences. No preamble.",
+        max_tokens=128,
+        stop=["\n\n\n"],
     ),
     Category.SENTIMENT: PromptSpec(
-        system=("Classify the sentiment as Positive, Negative, or Neutral. Output "
-                "the label, then a reason of at most 6 words."),
-        max_tokens=36,
+        system=(
+            "Classify the sentiment of the text. Respond in this format:\n"
+            "Label: <Positive|Negative|Neutral|Mixed>\n"
+            "Reason: <one sentence explanation>"
+        ),
+        max_tokens=64,
     ),
     Category.SUMMARIZATION: PromptSpec(
-        system=("Summarise, obeying any length/format constraint in the task. "
-                "Output only the summary — no preamble, no lead-in."),
-        max_tokens=90,
+        system=(
+            "Summarize the text, obeying the EXACT length and format constraints "
+            "stated in the task (e.g., sentence count, bullet points, word limit). "
+            "Output ONLY the summary."
+        ),
+        max_tokens=192,
     ),
     Category.NER: PromptSpec(
-        system=('Output ONLY compact JSON (no whitespace, no prose) with keys '
-                '"person","org","location","date", each a list of strings from '
-                "the text."),
-        max_tokens=120,
+        system=(
+            'Extract named entities from the text. Output ONLY a JSON object with '
+            'these keys: "person", "organization", "location", "date".'
+        ),
+        max_tokens=96,
     ),
-    # Reasoning categories: just enough working for correctness, answer anchored.
     Category.MATH: PromptSpec(
-        system=("Solve with brief working, then end with 'Answer: <value>' on "
-                "its own line."),
-        max_tokens=160,
+        system=(
+            "Solve the math problem. Use compact equations. End with:\n"
+            "Answer: <value>"
+        ),
+        max_tokens=256,
     ),
     Category.LOGIC: PromptSpec(
-        system=("Solve the puzzle so every stated constraint holds. Give at most "
-                "two brief reasoning steps, then output the final answer on its "
-                "own line as 'Answer: <value>'."),
-        max_tokens=150,
+        system=(
+            "Solve the logic problem. Use concise reasoning. End with:\n"
+            "Answer: <answer>"
+        ),
+        max_tokens=384,
     ),
-    # Code: keep generous headroom — a truncated answer fails the gate.
     Category.CODE_DEBUG: PromptSpec(
-        system=("State the bug in one short line, then output the corrected code "
-                "only, in a single code block. No other explanation."),
-        max_tokens=300,
+        system=(
+            "Identify the bug and provide the corrected code in a fenced code block. "
+            "After the code block, add one line starting with 'Bug:' describing the fix.\n\n"
+            "Format:\n"
+            "```python\n<corrected code>\n```\n"
+            "Bug: <one-line description of the bug>"
+        ),
+        max_tokens=512,
     ),
     Category.CODE_GEN: PromptSpec(
-        system=("Output only the requested function(s) in one code block — "
-                "correct and complete, no explanation, no usage examples."),
-        max_tokens=300,
+        system=(
+            "Write the requested function(s). Output ONLY the code in a single "
+            "fenced code block."
+        ),
+        max_tokens=512,
     ),
 }
-
-
-def spec_for(category: Category) -> PromptSpec:
-    return TEMPLATES[category]
