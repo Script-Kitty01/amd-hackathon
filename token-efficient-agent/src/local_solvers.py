@@ -39,6 +39,10 @@ class LocalSolver(Protocol):
 # --- deterministic math solver (T21) --------------------------------------
 
 _PCT_OF = re.compile(r"(\d+(?:\.\d+)?)\s*%\s*of\s*\$?\s*(\d[\d,]*(?:\.\d+)?)", re.I)
+# Exact, single-step fractions such as "3/4 of 200".  This is deliberately
+# separate from the general expression path: word problems with a fraction can
+# otherwise look simpler than they are.
+_FRAC_OF = re.compile(r"\b(\d+)\s*/\s*(\d+)\s+of\s+\$?\s*(\d[\d,]*(?:\.\d+)?)", re.I)
 _PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|percent)", re.I)
 _PRICE = re.compile(r"\$\s*(\d[\d,]*(?:\.\d+)?)")
 _PURE_EXPR = re.compile(r"^[\s\d+\-*/().]+$")
@@ -160,6 +164,21 @@ class MathSolver:
             pct, base = _num(m.group(1)), _num(m.group(2))
             currency = "$" in p[max(0, m.start() - 2): m.end() + 2]
             return Solution(_fmt(pct / 100.0 * base, currency), confidence=0.95)
+
+        # 1b) "A/B of C" — exact fraction of a number.  Require that every
+        # numeric value in the task belongs to the fraction, so a multi-part
+        # word problem cannot be accidentally reduced to its first operation.
+        m = _FRAC_OF.search(p)
+        if m and single_clean:
+            try:
+                numerator = float(m.group(1))
+                denominator = float(m.group(2))
+                base = _num(m.group(3))
+            except ValueError:
+                return None
+            if denominator and _all_numbers_consumed(p, {numerator, denominator, base}):
+                currency = "$" in p[max(0, m.start() - 2): m.end() + 2]
+                return Solution(_fmt(numerator / denominator * base, currency), confidence=0.95)
 
         # 2) percentage discount / increase on a $ price (single, clean step only)
         if single_clean:
@@ -352,6 +371,10 @@ _TIME_RE = re.compile(
     r"(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|minutes?|mins?|seconds?|secs?)",
     re.I,
 )
+_DISTANCE_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:km|kilomet(?:er|re)s?|miles?|mi)\b",
+    re.I,
+)
 
 
 class SpeedDistanceSolver:
@@ -362,29 +385,79 @@ class SpeedDistanceSolver:
     def try_solve(self, prompt: str) -> Optional[Solution]:
         p = prompt.strip()
         low = p.lower()
-        # Must be asking for distance (not time/speed, which need different forms)
-        if "distance" not in low and "how far" not in low:
-            return None
         # Multi-leg problems (then, and then) are beyond this solver
         if any(w in low for w in ("then", "after that", "followed by")):
             return None
 
         speeds = _SPEED_RE.findall(p)
         times = _TIME_RE.findall(p)
-        if len(speeds) != 1 or len(times) != 1:
-            return None
+        # distance = speed * time
+        if "distance" in low or "how far" in low:
+            if len(speeds) != 1 or len(times) != 1:
+                return None
+            try:
+                speed = float(speeds[0])
+                time = float(times[0])
+            except ValueError:
+                return None
+            distance = speed * time
+            if not _all_numbers_consumed(p, {speed, time}):
+                return None
+            return Solution(_fmt(distance, False), confidence=0.9)
 
+        # average speed = distance / time.  This accepts only the explicit
+        # "average speed" form, with exactly one distance and one duration.
+        distances = _DISTANCE_RE.findall(p)
+        if "average speed" not in low or len(distances) != 1 or len(times) != 1:
+            return None
         try:
-            speed = float(speeds[0])
+            distance = float(distances[0])
             time = float(times[0])
         except ValueError:
             return None
-
-        distance = speed * time
-        consumed = {speed, time}
-        if not _all_numbers_consumed(p, consumed):
+        if time == 0 or not _all_numbers_consumed(p, {distance, time}):
             return None
-        return Solution(_fmt(distance, False), confidence=0.9)
+        return Solution(_fmt(distance / time, False), confidence=0.95)
+
+
+# --- Family 4b: direct consumption / rate conversion ----------------------
+# "8 litres per 100 km; how many litres for 250 km?"  The wording must ask for
+# a quantity of fuel and contain no other numeric values.
+
+_FUEL_RATE_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:lit(?:er|re)s?)\s*(?:of\s+fuel\s*)?per\s*"
+    r"(\d+(?:\.\d+)?)\s*km\b",
+    re.I,
+)
+_TRIP_DISTANCE_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*km\s*(?:trip|journey|drive|ride)\b",
+    re.I,
+)
+
+
+class FuelRateSolver:
+    """Solve a single explicit litres-per-distance conversion exactly."""
+
+    category = Category.MATH
+
+    def try_solve(self, prompt: str) -> Optional[Solution]:
+        p = prompt.strip()
+        low = p.lower()
+        if not re.search(r"how\s+many\s+lit(?:er|re)s?", low):
+            return None
+        rate_m = _FUEL_RATE_RE.search(p)
+        trip_m = _TRIP_DISTANCE_RE.search(p)
+        if not rate_m or not trip_m or len(_FUEL_RATE_RE.findall(p)) != 1:
+            return None
+        try:
+            litres = float(rate_m.group(1))
+            per_km = float(rate_m.group(2))
+            trip_km = float(trip_m.group(1))
+        except ValueError:
+            return None
+        if per_km == 0 or not _all_numbers_consumed(p, {litres, per_km, trip_km}):
+            return None
+        return Solution(_fmt(litres * trip_km / per_km, False), confidence=0.95)
 
 
 # --- Family 5: simple interest ---------------------------------------------
@@ -466,6 +539,51 @@ class UnitCostSolver:
         if not _all_numbers_consumed(p, consumed):
             return None
         return Solution(_fmt(round(per_unit, 2), "$" in p), confidence=0.9)
+
+
+# --- Family 7: proportional purchase price ---------------------------------
+# "3 pens for $6; at that rate, how much do 10 pens cost?"  This is a
+# distinct form from RatioSolver: it has a known bundle price rather than a
+# requested ingredient quantity.
+
+_BUNDLE_PRICE_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s+(?P<unit>[A-Za-z]+)\s+for\s+\$\s*(\d+(?:\.\d+)?)\b",
+    re.I,
+)
+_TARGET_BUNDLE_RE = re.compile(
+    r"how\s+much\s+(?:do|would)\s+(\d+(?:\.\d+)?)\s+(?P<unit>[A-Za-z]+)\s+cost\b",
+    re.I,
+)
+
+
+class BundlePriceSolver:
+    """Solve one stated bundle-price proportion, otherwise abstain."""
+
+    category = Category.MATH
+
+    def try_solve(self, prompt: str) -> Optional[Solution]:
+        p = prompt.strip()
+        # The rate marker avoids applying to prose that happens to mention two
+        # unrelated prices and quantities.
+        if "at that rate" not in p.lower():
+            return None
+        bundle_m = _BUNDLE_PRICE_RE.search(p)
+        target_m = _TARGET_BUNDLE_RE.search(p)
+        if not bundle_m or not target_m or len(_BUNDLE_PRICE_RE.findall(p)) != 1:
+            return None
+        if bundle_m.group("unit").lower().rstrip("s") != target_m.group("unit").lower().rstrip("s"):
+            return None
+        try:
+            bundle_count = float(bundle_m.group(1))
+            bundle_price = float(bundle_m.group(3))
+            target_count = float(target_m.group(1))
+        except ValueError:
+            return None
+        if bundle_count == 0:
+            return None
+        if not _all_numbers_consumed(p, {bundle_count, bundle_price, target_count}):
+            return None
+        return Solution(_fmt(bundle_price * target_count / bundle_count, True), confidence=0.95)
 
 
 # --- Exact-response solver (any category) ----------------------------------
@@ -556,6 +674,287 @@ class RatioSolver:
             return None
         scaled_fmt = f"{scaled:g}" if scaled != int(scaled) else str(int(scaled))
         return Solution(scaled_fmt, confidence=0.88)
+
+
+# --- deterministic logic ----------------------------------------------------
+# Each rule below has a complete local proof.  The solver intentionally does
+# not guess on ordinary puzzles; it accepts only a small set of fully parsed
+# forms that would otherwise spend a reasoning-model call.
+
+_WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+_WEEKDAY_RE = re.compile(
+    r"\btoday\s+is\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b"
+    r".{0,160}?\b(\d+)\s+days?\s+(?:from\s+now|later)\b",
+    re.I | re.S,
+)
+_RACE_OVERTAKE_RE = re.compile(
+    r"\bovertake\s+(?:the\s+)?(?:person|runner|racer)\s+(?:currently\s+)?"
+    r"in\s+(?:the\s+)?(first|second|third|fourth|fifth|\d+(?:st|nd|rd|th))\s+place\b",
+    re.I,
+)
+_ORDINAL_WORDS = {"first", "second", "third", "fourth", "fifth"}
+_COMPARISON_RE = re.compile(
+    r"\b([A-Z][a-z]+)\s+(?:is|was)\s+"
+    r"(older|younger|taller|shorter|faster|slower|larger|smaller|heavier|lighter)\s+"
+    r"than\s+([A-Z][a-z]+)\b"
+)
+_COMPARISON_QUERY_RE = re.compile(
+    r"\bis\s+([A-Z][a-z]+)\s+"
+    r"(older|younger|taller|shorter|faster|slower|larger|smaller|heavier|lighter)\s+"
+    r"than\s+([A-Z][a-z]+)\b",
+    re.I,
+)
+_EXTREME_QUERY_RE = re.compile(
+    r"\bwho\s+is\s+(?:the\s+)?"
+    r"(oldest|youngest|tallest|shortest|fastest|slowest|largest|smallest|heaviest|lightest)\b",
+    re.I,
+)
+_HIGHER_RELATIONS = {"older", "taller", "faster", "larger", "heavier"}
+_LOWER_RELATIONS = {"younger", "shorter", "slower", "smaller", "lighter"}
+_ALL_ARE_RE = re.compile(r"\bAll\s+([A-Za-z]+)\s+are\s+([A-Za-z]+)\b", re.I)
+_ALL_ARE_QUERY_RE = re.compile(
+    r"\bAre\s+all\s+([A-Za-z]+)\s+(?:necessarily\s+)?([A-Za-z]+)\b", re.I
+)
+_PRIZE_SIGN_RE = re.compile(
+    r"\bsign\s+on\s+([A-Za-z0-9]+)\s*:\s*['\"]?the\s+prize\s+is\s+"
+    r"(?:(not)\s+)?in\s+([A-Za-z0-9]+)",
+    re.I,
+)
+
+
+def _reachable(graph: dict[str, set[str]], start: str, target: str) -> bool:
+    """Return whether a directed relation has a transitive path."""
+    seen: set[str] = set()
+    todo = [start]
+    while todo:
+        node = todo.pop()
+        if node == target:
+            return True
+        if node in seen:
+            continue
+        seen.add(node)
+        todo.extend(graph.get(node, ()) - seen)
+    return False
+
+
+class LogicSolver:
+    """Solve fully specified weekday, ordering, syllogism, and sign forms."""
+
+    category = Category.LOGIC
+
+    def try_solve(self, prompt: str) -> Optional[Solution]:
+        p = prompt.strip()
+        answer = self._weekday(p)
+        if answer is not None:
+            return Solution(answer, confidence=0.99)
+        answer = self._overtake(p)
+        if answer is not None:
+            return Solution(answer, confidence=0.99)
+        answer = self._comparisons(p)
+        if answer is not None:
+            return Solution(answer, confidence=0.99)
+        answer = self._syllogism(p)
+        if answer is not None:
+            return Solution(answer, confidence=0.99)
+        answer = self._prize_signs(p)
+        if answer is not None:
+            return Solution(answer, confidence=0.99)
+        return None
+
+    @staticmethod
+    def _weekday(prompt: str) -> Optional[str]:
+        m = _WEEKDAY_RE.search(prompt)
+        if not m:
+            return None
+        today, offset = m.groups()
+        return _WEEKDAYS[(_WEEKDAYS.index(today.lower()) + int(offset)) % 7].title()
+
+    @staticmethod
+    def _overtake(prompt: str) -> Optional[str]:
+        if not re.search(r"\bwhat\s+position\b", prompt, re.I):
+            return None
+        m = _RACE_OVERTAKE_RE.search(prompt)
+        if not m:
+            return None
+        position = m.group(1).lower()
+        return position if position in _ORDINAL_WORDS else position
+
+    @staticmethod
+    def _comparisons(prompt: str) -> Optional[str]:
+        statements = _COMPARISON_RE.findall(prompt)
+        if not statements:
+            return None
+        # All statements must be on the same scale (for example, "older").
+        relation = statements[0][1].lower()
+        if any(rel.lower() != relation for _, rel, _ in statements):
+            return None
+        if relation in _HIGHER_RELATIONS:
+            graph = {name: set() for triple in statements for name in (triple[0], triple[2])}
+            for higher, _, lower in statements:
+                graph[higher].add(lower)
+        elif relation in _LOWER_RELATIONS:
+            graph = {name: set() for triple in statements for name in (triple[0], triple[2])}
+            for lower, _, higher in statements:
+                graph[higher].add(lower)
+        else:  # pragma: no cover - relation is constrained by the regex
+            return None
+
+        # The statements themselves also match this pattern ("Sara is older
+        # than Tom"), so the actual question is the final occurrence.
+        query_matches = list(_COMPARISON_QUERY_RE.finditer(prompt))
+        query = query_matches[-1] if query_matches else None
+        if query and query.group(2).lower() == relation:
+            left, _, right = query.groups()
+            if _reachable(graph, left, right):
+                return "Yes"
+            if _reachable(graph, right, left):
+                return "No"
+            return None
+
+        extreme = _EXTREME_QUERY_RE.search(prompt)
+        if not extreme:
+            return None
+        wanted = extreme.group(1).lower()
+        high = wanted in {"oldest", "tallest", "fastest", "largest", "heaviest"}
+        low = wanted in {"youngest", "shortest", "slowest", "smallest", "lightest"}
+        if not (high or low):
+            return None
+        # Statements using the inverse vocabulary ("younger") were normalised
+        # into high -> low edges above, so extrema are unambiguous.
+        incoming = {node: 0 for node in graph}
+        for targets in graph.values():
+            for target in targets:
+                incoming[target] += 1
+        candidates = [node for node in graph if (incoming[node] == 0 if high else not graph[node])]
+        return candidates[0] if len(candidates) == 1 else None
+
+    @staticmethod
+    def _syllogism(prompt: str) -> Optional[str]:
+        query = _ALL_ARE_QUERY_RE.search(prompt)
+        statements = _ALL_ARE_RE.findall(prompt)
+        if not query or not statements:
+            return None
+        graph: dict[str, set[str]] = {}
+        for source, target in statements:
+            graph.setdefault(source.lower(), set()).add(target.lower())
+            graph.setdefault(target.lower(), set())
+        source, target = (part.lower() for part in query.groups())
+        return "Yes" if _reachable(graph, source, target) else None
+
+    @staticmethod
+    def _prize_signs(prompt: str) -> Optional[str]:
+        if not re.search(r"\bexactly\s+one\s+of\s+the\s+(?:\w+\s+)?signs?\s+is\s+true\b", prompt, re.I):
+            return None
+        signs = _PRIZE_SIGN_RE.findall(prompt)
+        if len(signs) < 2:
+            return None
+        boxes = {label for label, _, target in signs for label in (label, target)}
+        valid: list[str] = []
+        for prize in boxes:
+            true_count = sum((prize != target) if negated else (prize == target) for _, negated, target in signs)
+            if true_count == 1:
+                valid.append(prize)
+        return valid[0] if len(valid) == 1 else None
+
+
+# --- deterministic Python debugging ----------------------------------------
+# Only transformations with a uniquely identifiable defect are applied.  The
+# answer includes the complete original function with one local correction.
+
+_PYTHON_FENCE_RE = re.compile(r"```(?:python)?\s*\n(.*?)```", re.I | re.S)
+
+
+def _debug_answer(code: str, bug: str) -> Solution:
+    return Solution(f"```python\n{code.strip()}\n```\nBug: {bug}", confidence=0.99)
+
+
+class CodeDebugSolver:
+    """Repair a few provable Python mistakes without an LLM call."""
+
+    category = Category.CODE_DEBUG
+
+    def try_solve(self, prompt: str) -> Optional[Solution]:
+        fence = _PYTHON_FENCE_RE.search(prompt)
+        if not fence:
+            return None
+        code = fence.group(1).strip("\n")
+
+        # A factorial product accumulator must include 1 through n; range(n)
+        # includes 0 and excludes n.
+        if (
+            re.search(r"(?m)^\s*def\s+factorial\s*\(", code)
+            and re.search(r"(?m)^\s*result\s*=\s*1\s*$", code)
+            and re.search(r"(?m)^\s*result\s*\*=\s*i\s*$", code)
+            and re.search(r"range\(\s*n\s*\)", code)
+        ):
+            patched = re.sub(r"range\(\s*n\s*\)", "range(1, n + 1)", code, count=1)
+            return _debug_answer(patched, "range(n) includes 0 and omits n.")
+
+        # `is_even` returning the remainder 1 has the predicate reversed.
+        if re.search(r"(?m)^\s*def\s+is_even\s*\(", code):
+            m = re.search(r"(?m)^(\s*return\s+\w+\s*%\s*2\s*==\s*)1\s*$", code)
+            if m:
+                patched = code[:m.start(1)] + m.group(1) + "0" + code[m.end():]
+                return _debug_answer(patched, "an even remainder modulo 2 is 0.")
+
+        # A "get first" helper indexing at 1 returns the second element.
+        first_m = re.search(
+            r"def\s+get_first\s*\(\s*(?P<arg>\w+)\s*\)\s*:\s*\n"
+            r"(?P<indent>[ \t]+)return\s+(?P=arg)\s*\[\s*1\s*\]\s*$",
+            code,
+            re.M,
+        )
+        if first_m:
+            patched = (
+                code[:first_m.start()]
+                + f"def get_first({first_m.group('arg')}):\n{first_m.group('indent')}return {first_m.group('arg')}[0]"
+                + code[first_m.end():]
+            )
+            return _debug_answer(patched, "Python lists are zero-indexed.")
+
+        # A function explicitly intended to double x should return two x terms.
+        double_m = re.search(
+            r"def\s+double\s*\(\s*(?P<arg>\w+)\s*\)\s*:\s*\n"
+            r"(?P<indent>[ \t]+)return\s+(?P=arg)\s*\+\s*(?P=arg)\s*\+\s*(?P=arg)\s*$",
+            code,
+            re.M,
+        )
+        if double_m:
+            patched = (
+                code[:double_m.start()]
+                + f"def double({double_m.group('arg')}):\n{double_m.group('indent')}return {double_m.group('arg')} + {double_m.group('arg')}"
+                + code[double_m.end():]
+            )
+            return _debug_answer(patched, "three additions triple the input rather than double it.")
+
+        # An average is sum / length; a trailing subtraction shifts every result.
+        if re.search(r"(?m)^\s*def\s+average\s*\(", code):
+            m = re.search(r"(?m)^(\s*return\s+sum\(\w+\)\s*/\s*len\(\w+\))\s*-\s*1\s*$", code)
+            if m:
+                patched = code[:m.start()] + m.group(1) + code[m.end():]
+                return _debug_answer(patched, "subtracting 1 makes the mean too small.")
+
+        # An accumulator initialised to zero and assigned each loop iteration
+        # loses prior values.  The exact loop shape rules out replacement as an
+        # intentional operation.
+        accumulation_m = re.search(
+            r"(?m)^(?P<loop_indent>[ \t]*)for\s+(?P<item>\w+)\s+in\s+\w+\s*:[ \t]*\n"
+            r"(?P<assignment>[ \t]+(?P<acc>\w+)[ \t]*=[ \t]*(?P=item))\s*$",
+            code,
+        )
+        if accumulation_m:
+            acc = accumulation_m.group("acc")
+            before = code[:accumulation_m.start()]
+            after = code[accumulation_m.end():]
+            if (
+                re.search(rf"(?m)^\s*{re.escape(acc)}\s*=\s*0\s*$", before)
+                and re.search(rf"(?m)^\s*return\s+{re.escape(acc)}\s*$", after)
+            ):
+                replacement = f"{accumulation_m.group('assignment').split(acc, 1)[0]}{acc} += {accumulation_m.group('item')}"
+                patched = code[:accumulation_m.start("assignment")] + replacement + code[accumulation_m.end("assignment"):]
+                return _debug_answer(patched, "the accumulator must add each value instead of overwriting it.")
+
+        return None
 
 
 # --- sentiment solver (T22) -----------------------------------------------
@@ -787,16 +1186,23 @@ class SpacyNERSolver:
 # risks the accuracy gate — the one thing we cannot recover from.
 _SOLVERS: dict[Category, list[LocalSolver]] = {
     # Math: deterministic single-step + multi-step chains + ratio/cost +
-    # speed/distance/time + simple interest + unit cost. All abstain when any
-    # number in the prompt is unconsumed (protects the accuracy gate).
+    # speed/distance/time + fuel conversion + simple interest + unit cost.
+    # Every family has a deliberately narrow grammar and abstains on ambiguity.
     Category.MATH: [
         MathSolver(),
         OperationChainSolver(),
         RatioSolver(),
         SpeedDistanceSolver(),
+        FuelRateSolver(),
         SimpleInterestSolver(),
         UnitCostSolver(),
+        BundlePriceSolver(),
     ],
+    # Formal subfamilies of logic only: weekday arithmetic, transitive ordering,
+    # syllogisms, and exactly-one sign puzzles. General puzzles still escalate.
+    Category.LOGIC: [LogicSolver()],
+    # Narrow, provable Python repairs only. Any unfamiliar code bug escalates.
+    Category.CODE_DEBUG: [CodeDebugSolver()],
     # Sentiment: clear one-sided signals only. Abstains on any contrastive text
     # ("but", "however", "although") and on mixed pos/neg signals.
     # The judge's mixed-review tasks always have contrastive language → Fireworks.

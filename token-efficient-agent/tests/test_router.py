@@ -52,6 +52,16 @@ def test_logic_ranking_puzzle():
     assert classify(prompt) == Category.LOGIC
 
 
+def test_logic_special_forms():
+    assert classify(
+        "If today is Wednesday, what day of the week will it be 3 days from now?"
+    ) == Category.LOGIC
+    assert classify(
+        "All Bloops are Razzies. All Razzies are Lazzies. "
+        "Are all Bloops necessarily Lazzies?"
+    ) == Category.LOGIC
+
+
 # --- scoring / confidence / complexity (T4, T5) ---
 
 def test_route_confident_on_clear_signal():

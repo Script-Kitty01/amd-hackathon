@@ -292,3 +292,102 @@ def test_unit_cost():
     s = UnitCostSolver().try_solve("12 items cost $60. What is the price per item?")
     assert s is not None
     assert "5" in s.answer
+
+
+# --- additional zero-token math forms ---
+
+from src.local_solvers import BundlePriceSolver, FuelRateSolver
+
+
+def test_fraction_of_number():
+    s = solve("What is 3/4 of 200?")
+    assert s is not None and s.answer == "150"
+
+
+def test_fuel_consumption_rate():
+    s = FuelRateSolver().try_solve(
+        "A car uses 8 litres of fuel per 100 km. How many litres are needed for a 250 km trip?"
+    )
+    assert s is not None and s.answer == "20"
+
+
+def test_average_speed():
+    s = SpeedDistanceSolver().try_solve(
+        "A train travels 240 km in 3 hours. What is its average speed in km/h?"
+    )
+    assert s is not None and s.answer == "80"
+
+
+def test_bundle_price_proportion():
+    s = BundlePriceSolver().try_solve(
+        "A shop sells 3 pens for $6. At that rate, how much do 10 pens cost?"
+    )
+    assert s is not None and s.answer == "$20.00"
+
+
+# --- deterministic logic ---
+
+from src.local_solvers import LogicSolver
+
+
+def test_logic_weekday_offset():
+    s = LogicSolver().try_solve("If today is Wednesday, what day of the week will it be 3 days from now?")
+    assert s is not None and s.answer == "Saturday"
+
+
+def test_logic_transitive_comparison_yes_no():
+    s = LogicSolver().try_solve(
+        "Sara is older than Tom. Tom is older than Mike. Is Sara older than Mike? Answer yes or no."
+    )
+    assert s is not None and s.answer == "Yes"
+
+
+def test_logic_transitive_comparison_extreme():
+    s = LogicSolver().try_solve(
+        "Tom is taller than Jerry. Jerry is taller than Spike. Spike is taller than Butch. Who is the shortest?"
+    )
+    assert s is not None and s.answer == "Butch"
+
+
+def test_logic_syllogism():
+    s = LogicSolver().try_solve(
+        "All Bloops are Razzies. All Razzies are Lazzies. Are all Bloops necessarily Lazzies? Answer yes or no."
+    )
+    assert s is not None and s.answer == "Yes"
+
+
+def test_logic_exactly_one_sign():
+    s = LogicSolver().try_solve(
+        "Three boxes are labeled A, B, and C. Exactly one contains a prize. "
+        "Sign on A: 'The prize is in A.' Sign on B: 'The prize is not in B.' "
+        "Sign on C: 'The prize is not in A.' Exactly one of the three signs is true. "
+        "Which box has the prize?"
+    )
+    assert s is not None and s.answer == "B"
+
+
+# --- deterministic Python debugging ---
+
+from src.local_solvers import CodeDebugSolver
+
+
+def test_code_debug_accumulator_repair():
+    s = CodeDebugSolver().try_solve(
+        "Find and fix the bug:\n```python\ndef sum_list(lst):\n    total = 0\n"
+        "    for x in lst:\n        total = x\n    return total\n```"
+    )
+    assert s is not None and "total += x" in s.answer
+
+
+def test_code_debug_off_by_one_repair():
+    s = CodeDebugSolver().try_solve(
+        "Find and fix the bug:\n```python\ndef get_first(lst):\n    return lst[1]\n```"
+    )
+    assert s is not None and "return lst[0]" in s.answer
+
+
+def test_code_debug_double_repair():
+    s = CodeDebugSolver().try_solve(
+        "Find and fix the bug:\n```python\ndef double(x):\n    return x + x + x\n```"
+    )
+    assert s is not None and "return x + x" in s.answer and "x + x + x" not in s.answer

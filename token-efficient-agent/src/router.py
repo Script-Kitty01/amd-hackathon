@@ -35,6 +35,17 @@ _LOGIC_HINT = re.compile(
     r"if and only|given that|constraint|neither|exactly one|each of)\b",
     re.I,
 )
+# Logic forms without the normal ranking/constraint vocabulary.  These are
+# deliberately paired expressions (not broad words such as "today" or "all")
+# so they do not pull ordinary factual questions into the logic route.
+_LOGIC_SPECIAL = re.compile(
+    r"\btoday\s+is\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b.*?"
+    r"\b\d+\s+days?\s+(?:from\s+now|later)\b|"
+    r"\bovertake\s+(?:the\s+)?(?:person|runner|racer)\s+(?:currently\s+)?in\s+"
+    r"(?:the\s+)?(?:first|second|third|fourth|fifth|\d+(?:st|nd|rd|th))\s+place\b|"
+    r"\ball\s+[A-Za-z]+\s+are\s+[A-Za-z]+\b.*?\bare\s+all\s+[A-Za-z]+\b",
+    re.I | re.S,
+)
 
 # Simple keyword signals per category. Each hit adds 1.0 to that category.
 _KEYWORDS: dict[Category, tuple[str, ...]] = {
@@ -148,6 +159,8 @@ def _score(prompt: str) -> dict[Category, float]:
 
     # Logic / deductive puzzles.
     scores[Category.LOGIC] += _LOGIC_WEIGHT * len(_LOGIC_HINT.findall(prompt))
+    if _LOGIC_SPECIAL.search(prompt):
+        scores[Category.LOGIC] += _LOGIC_WEIGHT
 
     # Keyword-driven categories.
     for cat, words in _KEYWORDS.items():
